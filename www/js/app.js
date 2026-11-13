@@ -1,4 +1,5 @@
-import { S, save, reset, seen, box, isDue, grade, markStudy, liveStreak, can, canMock } from './store.js';
+import { S, save, reset, seen, box, isDue, grade, markStudy, liveStreak, can, canMock, today } from './store.js';
+import { READ } from './read.js';
 import { KANA, KROWS, UNITS, deva } from './data.js';
 import { N5W, N5K } from './n5.js';
 import { N4W, N4K } from './n4.js';
@@ -58,6 +59,67 @@ function nextStep(){
 }
 function nextRow(){ for (const s of ['h','k']) for (const r of KROWS[s]) if (r.items.some(k => !seen(k.id))) return { s, r }; return null; }
 
+/* ---------- mock exams and the Mikomi Score ---------- */
+const PASS = { n5:80, n4:90 }, MOCKS = { n5:6, n4:8 }, MINS = { n5:35, n4:40 };
+// Pass chance from the last three mocks (recent ones weigh more), cut down when a section is near or under its cut-off.
+function mikomi(lv){
+  const m = S.mocks.filter(x => x.lv === lv).slice(-3); if (!m.length) return null;
+  let w = 0, t = 0, la = 0, li = 0; m.forEach((x, i) => { const k = i + 1; w += k; t += x.total * k; la += x.lang * k; li += x.lis * k; });
+  t /= w; la /= w; li /= w;
+  let p = 1 / (1 + Math.exp(-(t - PASS[lv]) / 15)); if (la < 38 || li < 19) p *= .5; else if (la < 48 || li < 24) p *= .85;
+  return { pct:Math.round(p * 100), total:Math.round(t), lang:Math.round(la), lis:Math.round(li), n:m.length };
+}
+function scoreCard(){
+  const last = S.mocks[S.mocks.length - 1], lv = last ? last.lv : S.start === 'n4' ? 'n4' : 'n5', LV = lv.toUpperCase(), m = mikomi(lv);
+  const items = ALL.filter(x => x.lv === lv), cov = Math.round(items.filter(x => seen(x.id)).length / items.length * 100);
+  if (!m) return `<div class="card"><p class="eyebrow">Mikomi Score</p><b>Take a mock exam to see your pass chance</b><p class="muted">${cov}% of the ${LV} syllabus learned so far.</p><button class="btn ghost" data-tab="mock">Go to mock exams</button></div>`;
+  const weak = m.lis / 60 < m.lang / 120 ? `Listening (${m.lis} / 60, cut-off 19)` : `Language and reading (${m.lang} / 120, cut-off 38)`;
+  return `<div class="card"><p class="eyebrow">Mikomi Score · ${LV}</p><div style="display:flex;align-items:baseline;gap:10px"><span class="price" style="font-size:44px;color:${m.pct >= 60 ? 'var(--good)' : 'var(--shu)'}">${m.pct}%</span><b>pass chance</b></div>
+    <p class="muted">Projected ${m.total} / 180 from your last ${m.n === 1 ? 'mock' : m.n + ' mocks'}. Pass mark ${PASS[lv]}. Weakest: ${weak}. ${cov}% of the syllabus learned.</p></div>`;
+}
+function rng(a){ return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+// Mock n of a level is always the same paper: questions are drawn from the content bank with a fixed seed.
+function buildMock(lv, n){
+  const r = rng((lv === 'n5' ? 500 : 400) + n), sh = a => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const W = WORDS.filter(x => x.lv === lv), G = sh(GRAM.filter(x => x.lv === lv)), mean = x => S.lang === 'hi' ? `${x.hi} · ${x.en}` : `${x.en} · ${x.hi}`;
+  const pick = (pool, txt, f) => { const o = []; for (const x of sh(pool)) { const t = f(x); if (t !== txt && !o.includes(t)) o.push(t); if (o.length === 3) break; } return sh([{ t:txt, ok:true }, ...o.map(t => ({ t, ok:false }))]); };
+  const tag = t => `<span class="pill" style="align-self:center">${t}</span>`, play = s => `<button class="btn dark" data-say="${s}" style="width:auto;align-self:center">▶ Play</button>`;
+  const wk = sh(W.filter(x => x.rd !== x.ch && /[一-龯]/.test(x.ch) && !/[～(]/.test(x.ch))), wm = sh(W.filter(x => !/[～(]/.test(x.ch))), q = [];
+  wk.slice(0, 8).forEach(x => q.push({ sec:'v', txt:x.ch, prompt:`${tag('Vocabulary')}<p class="big ${sz(x)}">${x.ch}</p><p class="muted center">Choose the reading</p>`, opts:pick(wk, x.rd, y => y.rd) }));
+  wm.slice(0, 8).forEach(x => q.push({ sec:'v', txt:x.ch, one:true, prompt:`${tag('Vocabulary')}<p class="big ${sz(x)}">${x.ch}</p>${rdline(x)}<p class="muted center">Choose the meaning</p>`, opts:pick(W, mean(x), mean) }));
+  wm.slice(8, 12).forEach(x => q.push({ sec:'v', txt:mean(x), prompt:`${tag('Vocabulary')}<p class="mid">${mean(x)}</p><p class="muted center">Choose the word</p>`, opts:pick(wm, x.ch, y => y.ch) }));
+  G.slice(0, 15).forEach(g => q.push({ sec:'g', txt:g.q, prompt:`${tag('Grammar')}<p class="mid gq">${g.q.replace('＿', '<u>＿＿</u>')}</p><p class="muted center">Fill the blank</p>`, opts:sh(g.opts.map((t, i) => ({ t, ok:i === 0 }))) }));
+  sh(READ[lv]).slice(0, 2).forEach(p => p.q.forEach(([t, ...o]) => q.push({ sec:'r', txt:t, one:true, prompt:`${tag('Reading')}<div class="card passage">${p.t}</div><p><b>${t}</b></p>`, opts:sh(o.map((x, i) => ({ t:x, ok:i === 0 }))) })));
+  G.slice(15, 21).forEach(g => q.push({ sec:'l', txt:g.jp, one:true, prompt:`${tag('Listening')}${play(g.jp)}<p class="muted center">Listen. What does it mean?</p>`, opts:pick(G, g.tr, y => y.tr) }));
+  wm.slice(20, 24).forEach(x => q.push({ sec:'l', txt:`${x.ch} (${x.rd})`, one:true, prompt:`${tag('Listening')}${play(say(x))}<p class="muted center">Listen. Which word did you hear?</p>`, opts:pick(W, mean(x), mean) }));
+  return q.map(x => ({ ...x, custom:true, picked:null }));
+}
+let tick = null;
+const fmt = s => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+function startMock(lv, n){
+  L = { phase:'quiz', exam:true, lv, n, title:'Mock', qs:buildMock(lv, n), i:0, left:MINS[lv] * 60 };
+  clearInterval(tick); tick = setInterval(() => { L.left--; const c = $('#clock'); if (c) c.textContent = fmt(L.left); if (L.left <= 0) finishExam(); }, 1000);
+  draw();
+}
+function finishExam(){
+  clearInterval(tick);
+  const sc = s => L.qs.filter(q => q.sec === s), ok = a => a.filter(q => q.picked !== null && q.opts[q.picked].ok).length;
+  const lr = [...sc('v'), ...sc('g'), ...sc('r')], li = sc('l'), lang = Math.round(ok(lr) / lr.length * 120), lis = Math.round(ok(li) / li.length * 60), total = lang + lis;
+  L.res = { lv:L.lv, n:L.n, lang, lis, total, pass:total >= PASS[L.lv] && lang >= 38 && lis >= 19, parts:['v','g','r','l'].map(s => `${ok(sc(s))}/${sc(s).length}`) };
+  S.mocks.push({ lv:L.lv, n:L.n, lang, lis, total, day:today() }); save(); markStudy(); L.phase = 'result'; draw(); render();
+}
+function resultView(){
+  const r = L.res, wrong = L.qs.filter(q => q.picked === null || !q.opts[q.picked].ok);
+  const bar = (name, v, max, min) => `<div><div style="display:flex;justify-content:space-between"><b>${name}</b><span>${v} / ${max}</span></div><div class="meter"><u style="width:${v / max * 100}%;background:${v >= min ? 'var(--good)' : 'var(--shu)'}"></u></div><p class="muted">Section minimum ${min}${v >= min ? '' : '. Below the cut-off.'}</p></div>`;
+  return `<header><button class="x" data-act="close" aria-label="Close">✕</button><b>${r.lv.toUpperCase()} Mock ${r.n}</b></header>
+    <p class="center"><span class="pill ${r.pass ? 'ok' : 'pro'}">${r.pass ? 'Pass' : 'Not a pass yet'}</span></p>
+    <p class="big" style="font-size:64px">${r.total}<small style="font-size:22px"> / 180</small></p>
+    <p class="muted center">Pass mark ${PASS[r.lv]}. This is an estimate: the real JLPT scales marks differently.</p>
+    <div class="card">${bar('Language knowledge and reading', r.lang, 120, 38)}${bar('Listening', r.lis, 60, 19)}<p class="muted">Vocabulary ${r.parts[0]} · Grammar ${r.parts[1]} · Reading ${r.parts[2]} · Listening ${r.parts[3]}</p></div>
+    <div class="card"><p class="eyebrow">${wrong.length ? `Review your ${wrong.length} mistakes` : 'No mistakes'}</p><div class="list">${wrong.map(q => `<div class="item"><div><b>${q.txt}</b><span class="muted">${q.opts.find(o => o.ok).t}</span></div></div>`).join('')}</div></div>
+    <button class="btn" data-act="close">Done</button>`;
+}
+
 /* ---------- screens ---------- */
 const V = {
   onboard(){
@@ -88,7 +150,7 @@ const V = {
     return `<div><p class="eyebrow">Target ${esc(S.exam)}</p><h3>こんにちは、${esc(S.name || 'がくせい')}さん</h3></div>
     <div class="hero"><p class="eyebrow">Today</p><h3>${title}</h3><p class="muted">${sub}</p>${btn}</div>
     <div class="stats"><div><b>${liveStreak()}</b><span>day streak</span></div><div><b>${learned}</b><span>items learned</span></div><div><b>${due.length}</b><span>reviews due</span></div></div>
-    <div class="card"><p class="eyebrow">Mikomi Score</p><b>Your pass chance appears after your first mock exam</b><p class="muted">Mock exams open in a later update.</p></div>`;
+    ${scoreCard()}`;
   },
   learn(){
     const h = kanaStats('h'), k = kanaStats('k'), pct = Math.round((h.seen + k.seen) / (h.n + k.n) * 100);
@@ -124,11 +186,11 @@ const V = {
     <button class="btn dark" data-act="quizall">Quiz me on what I know</button>`;
   },
   mock(){
-    const row = (lv, n, t, d) => { const ok = canMock(lv, n); return `<button class="item" data-act="${ok ? 'soon' : 'lock:'+lv}"><span class="k">試</span><div><b>${t}</b><span class="muted">${d}</span></div><span class="pill ${ok ? '' : 'pro'}">${ok ? 'Free' : lv.toUpperCase()+' Pass'}</span></button>`; };
-    return `<div><p class="eyebrow">Mock exams</p><h3>Sit the paper before the paper</h3></div>
-    <div class="card"><p class="eyebrow">JLPT N5</p><div class="list">${row('n5',1,'N5 full mock 1','Scaled score out of 180')}${row('n5',2,'N5 full mocks 2 to 6','A new paper each week before the exam')}</div></div>
-    <div class="card"><p class="eyebrow">JLPT N4</p><div class="list">${row('n4',1,'N4 full mock 1','Scaled score out of 180')}${row('n4',2,'N4 full mocks 2 to 8','A new paper each week before the exam')}</div></div>
-    <p class="muted">Mock exams and the Mikomi Score open in a later update.</p>`;
+    const list = lv => `<div class="card"><p class="eyebrow">JLPT ${lv.toUpperCase()} · pass mark ${PASS[lv]} / 180</p><div class="list">${Array.from({ length:MOCKS[lv] }, (_, i) => {
+      const n = i + 1, ok = canMock(lv, n), done = S.mocks.filter(x => x.lv === lv && x.n === n), best = Math.max(...done.map(x => x.total));
+      return `<button class="item" data-act="${ok ? `mock:${lv}:${n}` : 'lock:' + lv}"><span class="k">試</span><div><b>${lv.toUpperCase()} Mock ${n}</b><span class="muted">${done.length ? `Best ${best} / 180 · taken ${done.length} ${done.length === 1 ? 'time' : 'times'}` : `49 questions · ${MINS[lv]} minutes`}</span></div><span class="pill ${!ok ? 'pro' : done.length && best >= PASS[lv] ? 'ok' : ''}">${!ok ? lv.toUpperCase() + ' Pass' : done.length ? best : n === 1 ? 'Free' : 'Open'}</span></button>`; }).join('')}</div></div>`;
+    return `<div><p class="eyebrow">Mock exams</p><h3>Sit the paper before the paper</h3><p class="muted">Vocabulary, grammar, reading and listening against the clock, scored out of 180 with both section cut-offs. No answers are shown until the end.</p></div>
+    ${scoreCard()}${list('n5')}${list('n4')}`;
   },
   me(){
     const has = lv => S.pro || S.passes.includes(lv);
@@ -180,7 +242,7 @@ function mkQ(it, n){
 }
 function toQuiz(){ L.phase = 'quiz'; L.qs = shuffle(L.items).slice(0, 12).map(mkQ); L.i = 0; L.right = 0; L.total = L.qs.length; draw(); }
 function draw(){
-  const head = p => `<header><button class="x" data-act="close" aria-label="Close">✕</button><div class="prog"><u style="width:${p*100}%"></u></div></header>`;
+  const head = p => `<header><button class="x" data-act="close" aria-label="Close">✕</button><div class="prog"><u style="width:${p*100}%"></u></div>${L.exam ? `<b id="clock">${fmt(L.left)}</b>` : ''}</header>`;
   let h;
   if (L.phase === 'cards') {
     const it = L.items[L.i];
@@ -193,11 +255,11 @@ function draw(){
   } else if (L.phase === 'quiz') {
     const q = L.qs[L.i], done = q.picked !== null;
     h = `${head(L.fromCards ? .5 + L.i / L.qs.length / 2 : L.i / L.qs.length)}<div class="grow"></div>
-      ${q.custom ? `${q.prompt}<div class="opts ${q.say ? 'one' : ''}">${q.opts.map((o, k) => `<button class="opt ${done ? (o.ok ? 'right' : k === q.picked ? 'wrong' : '') : ''}" data-pick="${k}" ${done ? 'disabled' : ''}>${o.t}</button>`).join('')}</div>${done ? `<div class="fb">${q.why}</div>` : ''}`
+      ${q.custom ? `${q.prompt}<div class="opts ${q.say || q.one ? 'one' : ''}">${q.opts.map((o, k) => `<button class="opt ${done ? (o.ok ? 'right' : k === q.picked ? 'wrong' : '') : ''}" data-pick="${k}" ${done ? 'disabled' : ''}>${o.t}</button>`).join('')}</div>${done ? `<div class="fb">${q.why}</div>` : ''}`
       : `      ${q.toChar ? `<p class="mid">${ans(q.it)}</p><p class="muted center">${q.it.kind === 'kana' ? 'Which kana makes this sound?' : 'Which one means this?'}</p>` : `<p class="big ${sz(q.it)}">${q.it.ch}</p>${q.it.kind === 'w' ? rdline(q.it) : ''}<p class="muted center">${q.it.kind === 'kana' ? 'Which sound is this?' : 'What does this mean?'}</p>`}
       <div class="opts">${q.opts.map((o,k) => `<button class="opt ${q.toChar ? 'jp '+sz(o) : ''} ${done ? (o === q.it ? 'right' : k === q.picked ? 'wrong' : '') : ''}" data-pick="${k}" ${done ? 'disabled' : ''}>${q.toChar ? o.ch : ans(o)}</button>`).join('')}</div>`}
       <div class="grow"></div>${done ? `<button class="btn" data-act="nextq">${L.i + 1 < L.qs.length ? 'Next' : 'Finish'}</button>` : '<div style="height:46px"></div>'}`;
-  } else {
+  } else if (L.phase === 'result') { h = resultView(); } else {
     h = `<header><button class="x" data-act="close" aria-label="Close">✕</button><b>Session complete</b></header><div class="grow"></div>
       ${L.test ? `<p class="center"><span class="pill ${L.pc >= 70 ? 'ok' : 'pro'}">${L.pc >= 70 ? 'Unit ' + L.tn + ' passed' : '70% needed to pass. Revise and try again.'}</span></p>` : ''}
       <p class="big" style="font-size:72px">${L.right} / ${L.total}</p><p class="center">Streak: <b>${liveStreak()}</b> ${liveStreak() === 1 ? 'day' : 'days'}</p>
@@ -213,12 +275,13 @@ $('#app').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b || b.disabled) return;
   const d = b.dataset;
   if (d.say) return speak(d.say);
-  if (d.tab) { U.tab = d.tab; U.view = null; $('#over').innerHTML = ''; render(); $('#screen').scrollTop = 0; return; }
+  if (d.tab) { clearInterval(tick); U.tab = d.tab; U.view = null; $('#over').innerHTML = ''; render(); $('#screen').scrollTop = 0; return; }
   if (d.set) { const [k, v] = d.set.split(':'); S[k] = v; save(); return render(); }
   if (d.script) { U.script = d.script; return render(); }
   if (d.plan) { S.pro = d.plan === 'pro'; S.passes = d.plan === 'n5' || d.plan === 'n4' ? [d.plan] : []; save(); return render(); }
   if (d.pick !== undefined) {
-    const q = L.qs[L.i]; q.picked = +d.pick; const ok = q.custom ? q.opts[q.picked].ok : q.opts[q.picked] === q.it;
+    const q = L.qs[L.i]; q.picked = +d.pick;
+    if (L.exam) { L.i++; return L.i < L.qs.length ? draw() : finishExam(); } const ok = q.custom ? q.opts[q.picked].ok : q.opts[q.picked] === q.it;
     if (!L.test && !q.say) grade(q.it.id, ok);
     if (ok) { if (!q.retry) L.right++; } else if (!q.retry && !L.test) { const r = mkQ(q.it, q.toChar ? 1 : 0); r.retry = true; L.qs.push(r); }
     return draw();
@@ -240,7 +303,8 @@ $('#app').addEventListener('click', e => {
     case 'ur': { const u = unitItems(U.lv, U.unit); startQuiz([...u.w, ...u.k].filter(x => seen(x.id)), 'Review'); break; }
     case 'quizall': startQuiz(KANA.filter(k => k.script === U.script && seen(k.id)), 'Review'); break;
     case 'nextq': L.i++; if (L.i < L.qs.length) draw(); else { if (L.test) { L.pc = Math.round(L.right / L.total * 100); S.tests[L.test] = Math.max(S.tests[L.test] || 0, L.pc); save(); } markStudy(); L.phase = 'done'; draw(); render(); } break;
-    case 'close': $('#over').innerHTML = ''; render(); break;
+    case 'close': clearInterval(tick); $('#over').innerHTML = ''; render(); break;
+    case 'mock': startMock(a1, +a2); break;
     case 'soon': sheet('Opening in the next update', 'This unit is part of your plan. Its lessons are being written now.'); break;
     case 'lock': sheet(`This needs the ${a1.toUpperCase()} Exam Pass`, `Kana, N5 units 1 to 5, N4 unit 1 and the first mock of each level are free. The Exam Pass (₹499) opens all of ${a1.toUpperCase()} until exam day. Pro opens both levels.`, 'See plans'); break;
     case 'plans': $('#over').innerHTML = ''; U.tab = 'me'; U.view = null; render(); break;
