@@ -33,4 +33,51 @@ if pathlib.Path('android/app/google-services.json').exists():
 else:
     print('No google-services.json supplied: this build has no Firebase, so sign-in will not work.')
 
+# Play services and Firebase expect Android 6 or newer.
+v = pathlib.Path('android/variables.gradle')
+t = v.read_text()
+if 'minSdkVersion = 22' in t:
+    v.write_text(t.replace('minSdkVersion = 22', 'minSdkVersion = 23'))
+    print('minSdkVersion raised to 23.')
+
+# If anything fails while the app starts, show the reason on screen instead of
+# closing silently, so a crash on someone else's phone can be read and fixed.
+main = pathlib.Path('android/app/src/main/java/in/mikomi/jlpt/MainActivity.java')
+if main.exists():
+    main.write_text('''package in.mikomi.jlpt;
+
+import android.os.Bundle;
+import android.widget.ScrollView;
+import android.widget.TextView;
+import com.getcapacitor.BridgeActivity;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+
+public class MainActivity extends BridgeActivity {
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        try {
+            super.onCreate(savedInstanceState);
+        } catch (Throwable error) {
+            StringWriter writer = new StringWriter();
+            error.printStackTrace(new PrintWriter(writer));
+            try {
+                TextView view = new TextView(this);
+                view.setText("Mikomi could not start.\\n\\n" + writer.toString());
+                view.setTextIsSelectable(true);
+                view.setPadding(40, 60, 40, 40);
+                view.setTextSize(11);
+                ScrollView scroll = new ScrollView(this);
+                scroll.addView(view);
+                setContentView(scroll);
+            } catch (Throwable ignored) {
+                throw error;
+            }
+        }
+    }
+}
+''')
+    print('Startup error screen installed.')
+
 app.write_text(s)
