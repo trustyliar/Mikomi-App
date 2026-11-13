@@ -37,8 +37,14 @@ else:
 v = pathlib.Path('android/variables.gradle')
 t = v.read_text()
 if 'minSdkVersion = 22' in t:
-    v.write_text(t.replace('minSdkVersion = 22', 'minSdkVersion = 23'))
+    t = t.replace('minSdkVersion = 22', 'minSdkVersion = 23')
     print('minSdkVersion raised to 23.')
+# The sign-in plugin leaves Google's sign-in library out of the app unless this is set,
+# which otherwise makes the app crash on launch with a missing GoogleSignIn class.
+if 'rgcfaIncludeGoogle' not in t:
+    t = t.replace('ext {', 'ext {\n    rgcfaIncludeGoogle = true', 1)
+    print('Google sign-in library will be packaged.')
+v.write_text(t)
 
 # If anything fails while the app starts, show the reason on screen instead of
 # closing silently, so a crash on someone else's phone can be read and fixed.
