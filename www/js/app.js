@@ -28,7 +28,7 @@ const passed = (lv, n) => (S.tests[lv + ':' + n] || 0) >= 70;
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const shuffle = a => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]] = [a[j],a[i]]; } return a; };
-const TABS = [['today','今日','Today'],['learn','学ぶ','Learn'],['mock','試験','Mock'],['me','私','Me']];
+const TABS = [['today','今日','Today'],['learn','学ぶ','Learn'],['play','遊ぶ','Play'],['mock','試験','Mock'],['me','私','Me']];
 const U = { tab:'today', view:null, script:'h' };   // view: null (tab) or 'kana'
 const sound = it => S.lang === 'hi' ? `${deva(it.ro)} <small>${it.ro}</small>` : `${it.ro} <small>${deva(it.ro)}</small>`;
 
@@ -204,6 +204,15 @@ const V = {
       <button class="kgo" data-act="row:${s}:${r.name}">${r.items.every(k => seen(k.id)) ? 'Redo' : 'Learn'}</button></div>`).join('')}</div>
     <button class="btn dark" data-act="quizall">Quiz me on what I know</button>`;
   },
+  play(){
+    const card = (id, jp, name, desc, unit) => `<button class="card game" data-act="game:${id}"><span class="k">${jp}</span><div><b>${name}</b><span class="muted">${desc}</span></div>${S.best[id] ? `<span class="pill ok">Best ${S.best[id]}${unit || ''}</span>` : ''}</button>`;
+    return `<div class="greet">${daru('cheer', 60)}<div><p class="eyebrow">Play</p><h3>Games that count as study</h3><p class="muted">Every game uses what you have learned so far and earns XP.</p></div></div>
+    ${card('rain', '雨', 'Kana Rain', 'Catch each falling kana before it lands. It gets faster.')}
+    ${card('ninja', '忍', 'Particle Ninja', '60 seconds. Pick the right particle: は, を, に, で…')}
+    ${card('build', '文', 'Sentence Builder', 'Tap the tiles into order. The Hindi line is your hint.')}
+    ${card('pairs', '組', 'Kanji Pairs', 'Flip the cards and match each kanji to its meaning.', ' moves')}
+    ${card('blitz', '速', '60-second Blitz', 'How many words and kanji can you get in one minute?')}`;
+  },
   mock(){
     const list = lv => `<div class="card"><p class="eyebrow">JLPT ${lv.toUpperCase()} · pass mark ${PASS[lv]} / 180</p><div class="list">${Array.from({ length:MOCKS[lv] }, (_, i) => {
       const n = i + 1, ok = canMock(lv, n), done = S.mocks.filter(x => x.lv === lv && x.n === n), best = Math.max(...done.map(x => x.total));
@@ -305,11 +314,101 @@ function draw(){
   $('#over').innerHTML = `<div class="over">${h}</div>`;
 }
 
+/* ---------- mini-games ---------- */
+let G = null;
+const curLv = () => { const st = nextStep(); return st && st.lv ? st.lv : S.start === 'n4' ? 'n4' : 'n5'; };
+const padTo = (a, extra, n) => a.length >= n ? a : [...new Set([...a, ...extra])];
+// Games use what the learner has seen; a small starter set fills in for brand-new learners.
+const kanaPool = () => padTo(KANA.filter(k => seen(k.id)), KANA.filter(k => k.script === 'h').slice(0, 15), 15);
+const itemPool = kind => { const lv = curLv(), all = [...WORDS, ...KANJI].filter(x => !kind || x.kind === kind); return padTo(all.filter(x => seen(x.id)), all.filter(x => x.lv === lv && x.unit <= 2), 16); };
+const gramPool = () => { const lv = curLv(); return padTo(GRAM.filter(x => seen(x.id)), GRAM.filter(x => x.lv === lv && x.unit <= 5), 8); };
+const PART = ['は','を','に','で','と','も','の','が','へ','から','まで','より'], CONF = [['は','が','も'],['に','へ'],['を','が']];
+function partQs(){
+  const qs = [];
+  for (const g of gramPool()) g.tok.forEach((t, i) => { if (!PART.includes(t[0]) || t[1] === 'दाँत') return;
+    const a = t[0], no = p => p === a || CONF.some(c => c.includes(a) && c.includes(p));
+    qs.push({ g, i, a, opts: shuffle([a, ...shuffle(PART.filter(p => !no(p))).slice(0, 3)]) }); });
+  return qs;
+}
+const alive = tk => G && G.tk === tk && !G.over && $('#over .gm');
+function timer(){ clearInterval(tick); tick = setInterval(() => { if (!G || G.over || !$('#over .gm')) return clearInterval(tick); G.left--; const c = $('#clock'); if (c) c.textContent = Math.max(0, G.left); if (G.left <= 0) endGame(G.score, 'correct'); }, 1000); }
+function startGame(id){
+  if (!$('#over').innerHTML) hpush();
+  clearInterval(tick); G = { id, tk:Math.random(), score:0, n:0 };
+  if (id === 'rain') { G.lives = 3; G.pool = kanaPool(); return rainNext(); }
+  if (id === 'ninja') { G.qs = shuffle(partQs()); G.i = 0; G.combo = 0; G.left = 60; timer(); }
+  if (id === 'blitz') { G.pool = shuffle(itemPool()); G.i = 0; G.left = 60; G.q = mkQ(G.pool[0], 0); timer(); }
+  if (id === 'build') { G.list = shuffle(gramPool().filter(g => g.tok.length >= 4)).slice(0, 5); G.i = 0; buildSet(); }
+  if (id === 'pairs') { const k = itemPool('k'), its = shuffle(k.length >= 6 ? k : itemPool()).slice(0, 6); G.cards = shuffle(its.flatMap(it => [{ it, t:it.ch, jp:true }, { it, t:S.lang === 'hi' ? it.hi : it.en }])); G.open = []; G.moves = 0; }
+  drawGame();
+}
+function rainNext(){
+  G.it = shuffle(G.pool)[0]; G.opts = shuffle([G.it, ...shuffle(G.pool.filter(k => k.ro !== G.it.ro)).filter((k, i, a) => a.findIndex(x => x.ro === k.ro) === i).slice(0, 3)]);
+  G.dur = Math.max(2, 5 - G.score * .15); G.x = 15 + Math.floor(Math.random() * 70); drawGame();
+  const tk = G.tk, n = ++G.n; setTimeout(() => { if (alive(tk) && G.n === n) rainMiss(); }, G.dur * 1000);
+}
+function rainMiss(){ G.lives--; G.lives <= 0 ? endGame(G.score, 'kana caught') : rainNext(); }
+function buildSet(){ const g = G.list[G.i]; do { G.order = shuffle(g.tok.map((_, i) => i)); } while (G.order.every((v, i) => v === i)); G.placed = []; G.state = null; G.fail = false; }
+function endGame(score, unit, lowerBetter){
+  clearInterval(tick); const old = S.best[G.id], isBest = score > 0 && (old === undefined || (lowerBetter ? score < old : score > old));
+  if (isBest) S.best[G.id] = score; const xp = lowerBetter ? 15 : Math.min(20, 5 + score * (G.id === 'build' ? 3 : 1));
+  addXp(xp); markStudy(); save(); G.over = { score, unit, isBest, xp }; drawGame(); render();
+}
+function gameTap(a){
+  if (!G || G.over) return; const [act, v] = a.split(':'), k = +v, tk = G.tk;
+  const later = (ms, f) => { G.lock = true; drawGame(); setTimeout(() => { if (!alive(tk)) return; G.lock = false; G.pick = null; f(); drawGame(); }, ms); };
+  if (act === 'r') return G.opts[k] === G.it ? (G.score++, rainNext()) : rainMiss();
+  if (G.lock) return;
+  if (act === 'n') { const q = G.qs[G.i], ok = q.opts[k] === q.a; G.pick = k; if (ok) { G.score++; G.combo++; } else { G.combo = 0; G.left -= 3; } return later(ok ? 400 : 1000, () => { G.i = (G.i + 1) % G.qs.length; }); }
+  if (act === 'b') { const ok = G.q.opts[k] === G.q.it; G.pick = k; if (ok) G.score++; return later(ok ? 300 : 800, () => { G.i++; G.q = mkQ(G.pool[G.i % G.pool.length], G.i); }); }
+  if (act === 'p') { const c = G.cards[k]; if (c.open || c.done) return; c.open = true; G.open.push(c);
+    if (G.open.length < 2) return drawGame();
+    G.moves++; const [x, y] = G.open; G.open = [];
+    if (x.it === y.it) { x.done = y.done = true; return G.cards.every(c => c.done) ? endGame(G.moves, 'moves', true) : drawGame(); }
+    return later(800, () => { x.open = y.open = false; }); }
+  const g = G.list[G.i];
+  if (act === 'put' && !G.state) { G.placed.push(k); if (G.placed.length === g.tok.length) { const ok = G.placed.map(i => g.tok[i][0]).join('') === g.jp; G.state = ok ? 'ok' : 'no'; if (ok) { if (!G.fail) G.score++; speak(g.jp); } else G.fail = true; } }
+  if (act === 'pull' && !G.state) G.placed.splice(k, 1);
+  if (act === 'retry') { G.placed = []; G.state = null; }
+  if (act === 'bnext') { G.i++; if (G.i >= G.list.length) return endGame(G.score, 'right first time'); buildSet(); }
+  drawGame();
+}
+function drawGame(){
+  const NAME = { rain:'Kana Rain', ninja:'Particle Ninja', build:'Sentence Builder', pairs:'Kanji Pairs', blitz:'60-second Blitz' };
+  const head = st => `<header><button class="x" data-act="close" aria-label="Close">✕</button><b>${NAME[G.id]}</b><span class="grow"></span>${st}</header>`;
+  const cls = (ok, k) => G.lock ? (ok ? 'right' : k === G.pick ? 'wrong' : '') : '';
+  let h;
+  if (G.over) { const o = G.over;
+    h = `${head('')}<div class="grow"></div><div class="center">${daru(o.isBest ? 'cheer' : 'happy', 96)}</div><p class="big" style="font-size:64px">${o.score}</p><p class="center">${o.unit}${o.isBest ? ' · <b>new best!</b>' : S.best[G.id] ? ` · best ${S.best[G.id]}` : ''}</p><p class="center muted">+${o.xp} XP · Streak: ${liveStreak()} ${liveStreak() === 1 ? 'day' : 'days'}</p><div class="grow"></div><button class="btn" data-act="game:${G.id}">Play again</button><button class="btn ghost" data-act="close">Done</button>`;
+  } else if (G.id === 'rain') {
+    h = `${head(`<b>${G.score}</b><span class="hearts">${'♥'.repeat(G.lives)}${'♡'.repeat(3 - G.lives)}</span>`)}<div class="sky"><span class="drop" style="left:${G.x}%;animation-duration:${G.dur}s">${G.it.ch}</span></div>
+      <div class="opts">${G.opts.map((o, k) => `<button class="opt" data-g="r:${k}">${sound(o)}</button>`).join('')}</div>`;
+  } else if (G.id === 'ninja') { const q = G.qs[G.i];
+    h = `${head(`${G.combo > 1 ? `<span class="pill pro">${G.combo} combo</span>` : ''}<b>${G.score}</b><b id="clock" class="pill">${G.left}</b>`)}<div class="grow"></div>
+      <div class="card"><div class="bridge">${q.g.tok.map(([j, hi], i) => i === q.i ? `<div class="tok p"><b>${G.lock ? q.a : '＿'}</b><span>${hi}</span></div>` : `<div class="tok"><b>${j}</b><span>${hi}</span></div>`).join('')}</div><p class="muted">${q.g.tr}</p></div>
+      <div class="grow"></div><div class="opts">${q.opts.map((o, k) => `<button class="opt jp" data-g="n:${k}" ${G.lock ? 'disabled' : ''} class2="${cls(o === q.a, k)}">${o}</button>`).join('').replace(/class="opt jp"([^>]*) class2="([^"]*)"/g, 'class="opt jp $2"$1')}</div>`;
+  } else if (G.id === 'blitz') { const q = G.q;
+    h = `${head(`<b>${G.score}</b><b id="clock" class="pill">${G.left}</b>`)}<div class="grow"></div>
+      ${q.toChar ? `<p class="mid">${ans(q.it)}</p>` : `<p class="big ${sz(q.it)}">${q.it.ch}</p>${q.it.kind === 'w' ? rdline(q.it) : ''}`}
+      <div class="grow"></div><div class="opts">${q.opts.map((o, k) => `<button class="opt ${q.toChar ? 'jp ' + sz(o) : ''} ${cls(o === q.it, k)}" data-g="b:${k}" ${G.lock ? 'disabled' : ''}>${q.toChar ? o.ch : ans(o)}</button>`).join('')}</div>`;
+  } else if (G.id === 'build') { const g = G.list[G.i], t = i => g.tok[i][0];
+    h = `${head(`<span class="muted">${G.i + 1} / ${G.list.length}</span>`)}
+      <div class="card"><p class="eyebrow">Build this sentence</p><b>${g.tr}</b><p class="note">${S.lang === 'hi' ? 'हिंदी क्रम: ' : 'Hindi order: '}${g.tok.map(x => x[1]).filter(x => x !== '—').join(' ')}</p></div>
+      <div class="slot ${G.state || ''}">${G.placed.map((i, pos) => `<button class="tile" data-g="pull:${pos}">${t(i)}</button>`).join('') || '<span class="muted">Tap the tiles below in order</span>'}</div>
+      <div class="bank">${G.order.filter(i => !G.placed.includes(i)).map(i => `<button class="tile" data-g="put:${i}">${t(i)}</button>`).join('')}</div><div class="grow"></div>
+      ${G.state === 'ok' ? `<div class="fb"><b>正解！ ${g.ch}</b>${S.lang === 'hi' ? g.hi : g.en}</div><button class="btn" data-g="bnext">${G.i + 1 < G.list.length ? 'Next sentence' : 'Finish'}</button>` : G.state === 'no' ? `<div class="fb"><b>おしい！ Not quite</b>Japanese follows the Hindi order. Read the hint again.</div><button class="btn" data-g="retry">Try again</button>` : ''}`;
+  } else {
+    h = `${head(`<span class="muted">${G.moves} moves</span>`)}<p class="muted center">Match each kanji with its meaning.</p><div class="cards">${G.cards.map((c, k) => `<button class="mc ${c.done ? 'done' : c.open ? 'open' : ''} ${c.jp ? 'jp' : ''}" data-g="p:${k}" aria-label="${c.open || c.done ? '' : 'Hidden card'}">${c.open || c.done ? c.t : '見'}</button>`).join('')}</div>`;
+  }
+  $('#over').innerHTML = `<div class="over gm">${h}</div>`;
+}
+
 /* ---------- events ---------- */
 $('#app').addEventListener('input', e => { if (e.target.id === 'name') { S.name = e.target.value.trim().slice(0, 24); save(); } });
 $('#app').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b || b.disabled) return;
   const d = b.dataset;
+  if (d.g) return gameTap(d.g);
   if (d.say) return speak(d.say);
   if (d.tab) { clearInterval(tick); U.tab = d.tab; U.view = null; $('#over').innerHTML = ''; render(); $('#screen').scrollTop = 0; return; }
   if (d.set) { const [k, v] = d.set.split(':'); S[k] = v; save(); return render(); }
@@ -342,6 +441,7 @@ $('#app').addEventListener('click', e => {
     case 'nextq': L.hit = false; L.i++; if (L.i < L.qs.length && !(L.test && L.miss >= 4)) draw(); else { if (L.test) { L.pc = Math.round(L.right / L.total * 100); S.tests[L.test] = Math.max(S.tests[L.test] || 0, L.pc); save(); } gain(L.test && L.pc >= 70 ? 30 : 10); markStudy(); L.phase = 'done'; draw(); render(); } break;
     case 'close': hback(); clearInterval(tick); $('#over').innerHTML = ''; render(); break;
     case 'mock': startMock(a1, +a2); break;
+    case 'game': startGame(a1); break;
     case 'soon': sheet('Opening in the next update', 'This unit is part of your plan. Its lessons are being written now.'); break;
     case 'lock': sheet(`This needs the ${a1.toUpperCase()} Exam Pass`, `Kana, N5 units 1 to 5, N4 unit 1 and the first mock of each level are free. The Exam Pass (₹499) opens all of ${a1.toUpperCase()} until exam day. Pro opens both levels.`, 'See plans'); break;
     case 'plans': hback(); $('#over').innerHTML = ''; U.tab = 'me'; U.view = null; render(); break;

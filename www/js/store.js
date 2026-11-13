@@ -1,6 +1,6 @@
 // On-device state, spaced repetition and plan gating.
 const KEY = 'mikomi.v1';
-const DEF = () => ({ onboarded:false, name:'', start:'kana', lang:'hi', exam:'Jul 2027', passes:[], pro:false, srs:{}, tests:{}, mocks:[], xp:0, xpDay:null, xpToday:0, goal:30, freezes:1, streak:0, lastDay:null });
+const DEF = () => ({ onboarded:false, name:'', start:'kana', lang:'hi', exam:'Jul 2027', passes:[], pro:false, srs:{}, tests:{}, mocks:[], best:{}, xp:0, xpDay:null, xpToday:0, goal:30, freezes:1, streak:0, lastDay:null });
 let saved = null;
 try { saved = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
 export const S = Object.assign(DEF(), saved || {});
