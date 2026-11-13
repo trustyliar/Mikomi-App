@@ -1,21 +1,28 @@
 import { S, save, reset, seen, box, isDue, grade, markStudy, liveStreak, can, canMock } from './store.js';
 import { KANA, KROWS, UNITS, deva } from './data.js';
 import { N5W, N5K } from './n5.js';
+import { N4W, N4K } from './n4.js';
 import { G5 } from './g5.js';
+import { G4 } from './g4.js';
 
 KANA.forEach(k => k.kind = 'kana');
-const WORDS = N5W.map((w,i) => ({ id:'w5:'+i, ch:w[0], rd:w[1], en:w[2], hi:w[3], unit:w[4], kind:'w5' }));
-const KANJI = N5K.map(k => ({ id:'k5:'+k[0], ch:k[0], rd:[k[1],k[2]].filter(Boolean).join(' · '), en:k[3], hi:k[4], unit:k[5], kind:'k5' }));
-const GRAM = []; { let u = 0, k = 0;
-  for (const line of G5.trim().split('\n')) {
-    if (line[0] === '@') { u = +line.slice(1); k = 0; continue; }
+// Every word, kanji and grammar point carries its level (lv: 'n5' or 'n4') and unit number.
+const WORDS = [], KANJI = [], GRAM = [];
+for (const [n, W, K, G] of [[5, N5W, N5K, G5], [4, N4W, N4K, G4]]) {
+  const lv = 'n' + n;
+  W.forEach((w, i) => WORDS.push({ id:`w${n}:${i}`, ch:w[0], rd:w[1], en:w[2], hi:w[3], unit:w[4], kind:'w', lv }));
+  K.forEach(k => KANJI.push({ id:`k${n}:${k[0]}`, ch:k[0], rd:[k[1],k[2]].filter(Boolean).join(' · '), en:k[3], hi:k[4], unit:k[5], kind:'k', lv }));
+  let u = 0, c = 0;
+  for (const line of G.trim().split('\n')) {
+    if (line[0] === '@') { u = +line.slice(1); c = 0; continue; }
     const [p, hi, en, ex, tr, q, o] = line.split(' # ');
     const tok = ex.split(' ').map(t => { const [j, h] = t.split('='); return [j.replace('*', '').replace(/_/g, ' '), h.replace(/_/g, ' '), j.includes('*')]; });
-    GRAM.push({ id:`g5:${u}.${++k}`, kind:'g5', unit:u, ch:p, hi, en, tok, tr, q, opts:o.split(','), jp:tok.map(t => t[0]).join('') });
-  } }
+    GRAM.push({ id:`g${n}:${u}.${++c}`, kind:'g', lv, unit:u, ch:p, hi, en, tok, tr, q, opts:o.split(','), jp:tok.map(t => t[0]).join('') });
+  }
+}
 const ALL = [...KANA, ...WORDS, ...KANJI, ...GRAM];
-const unitItems = n => ({ w: WORDS.filter(x => x.unit === n), k: KANJI.filter(x => x.unit === n), g: GRAM.filter(x => x.unit === n) });
-const passed = n => (S.tests[n] || 0) >= 70;
+const unitItems = (lv, n) => { const f = x => x.lv === lv && x.unit === n; return { w: WORDS.filter(f), k: KANJI.filter(f), g: GRAM.filter(f) }; };
+const passed = (lv, n) => (S.tests[lv + ':' + n] || 0) >= 70;
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -37,15 +44,15 @@ const dueAll = () => ALL.filter(k => isDue(k.id)).slice(0, 20);
 // What to learn next: a kana row, a set of new N5 words or kanji, or a locked unit.
 function nextStep(){
   if (S.start === 'kana') { const r = nextRow(); if (r) return { kind:'row', ...r }; }
-  for (let n = 1; n <= UNITS.n5.length; n++) {
-    const u = unitItems(n), un = a => a.filter(x => !seen(x.id)), w = un(u.w), k = un(u.k), g = un(u.g);
-    if (!w.length && !k.length && !g.length && passed(n)) continue;
-    if (!can('n5', n)) return { kind:'lock', n };
+  for (const lv of (S.start === 'n4' ? ['n4'] : ['n5', 'n4'])) for (let n = 1; n <= UNITS[lv].length; n++) {
+    const u = unitItems(lv, n), un = a => a.filter(x => !seen(x.id)), w = un(u.w), k = un(u.k), g = un(u.g);
+    if (!w.length && !k.length && !g.length && passed(lv, n)) continue;
+    if (!can(lv, n)) return { kind:'lock', lv, n };
     // Order inside a unit: first words, then grammar, the rest of the words, kanji, and the unit test.
-    if (w.length && (u.w.length - w.length < 6 || !g.length)) return { kind:'set', n, items:w.slice(0, 6), what:'words' };
-    if (g.length) return { kind:'set', n, items:g, what:g.length === 1 ? 'grammar point' : 'grammar points' };
-    if (k.length) return { kind:'set', n, items:k, what:'kanji' };
-    return { kind:'test', n };
+    if (w.length && (u.w.length - w.length < 6 || !g.length)) return { kind:'set', lv, n, items:w.slice(0, 6), what:'words' };
+    if (g.length) return { kind:'set', lv, n, items:g, what:g.length === 1 ? 'grammar point' : 'grammar points' };
+    if (k.length) return { kind:'set', lv, n, items:k, what:'kanji' };
+    return { kind:'test', lv, n };
   }
   return null;
 }
@@ -71,11 +78,11 @@ const V = {
   today(){
     const due = dueAll(), st = nextStep(), learned = ALL.filter(k => seen(k.id)).length;
     let nt, ns, nb;
-    if (!st) { nt = 'Everything in N5 is learned. お疲れさま！'; ns = 'Keep reviewing. N4 opens in a later update.'; nb = ''; }
+    if (!st) { nt = 'Every unit is complete. お疲れさま！'; ns = 'Keep up your reviews until exam day.'; nb = ''; }
     else if (st.kind === 'row') { nt = `New row: ${st.r.items.map(i => i.ch).join(' ')}`; ns = `${st.s === 'h' ? 'Hiragana' : 'Katakana'}, about 3 minutes.`; nb = `<button class="btn" data-act="row:${st.s}:${st.r.name}">Learn this row</button>`; }
-    else if (st.kind === 'set') { nt = `N5 Unit ${st.n}: ${st.items.length} new ${st.what}`; ns = st.items.map(i => i.ch).join('、'); nb = `<button class="btn" data-act="next">Learn these</button>`; }
-    else if (st.kind === 'test') { nt = `N5 Unit ${st.n}: unit test`; ns = '10 questions on this unit. 70% to pass.'; nb = `<button class="btn" data-act="test:${st.n}">Take the test</button>`; }
-    else { nt = `Unit ${st.n} needs the N5 Exam Pass`; ns = 'You have finished the free units.'; nb = `<button class="btn" data-act="lock:n5">See what it unlocks</button>`; }
+    else if (st.kind === 'set') { nt = `${st.lv.toUpperCase()} Unit ${st.n}: ${st.items.length} new ${st.what}`; ns = st.items.map(i => i.ch).join('、'); nb = `<button class="btn" data-act="next">Learn these</button>`; }
+    else if (st.kind === 'test') { nt = `${st.lv.toUpperCase()} Unit ${st.n}: unit test`; ns = '10 questions on this unit. 70% to pass.'; nb = `<button class="btn" data-act="test:${st.lv}:${st.n}">Take the test</button>`; }
+    else { nt = `Unit ${st.n} needs the ${st.lv.toUpperCase()} Exam Pass`; ns = 'You have finished the free units.'; nb = `<button class="btn" data-act="lock:${st.lv}">See what it unlocks</button>`; }
     let title = nt, sub = ns, btn = nb;
     if (due.length) { title = `${due.length} ${due.length === 1 ? 'item' : 'items'} ready for review`; sub = 'Reviewing just before you forget is what makes them stick.'; btn = `<button class="btn" data-act="review">Start review</button>${st && st.kind !== 'lock' ? `<p class="muted">Then: ${nt}</p>${nb.replace('class="btn"','class="btn ghost" style="color:#fff;border-color:#8fa0ff"')}` : ''}`; }
     return `<div><p class="eyebrow">Target ${esc(S.exam)}</p><h3>こんにちは、${esc(S.name || 'がくせい')}さん</h3></div>
@@ -86,22 +93,22 @@ const V = {
   learn(){
     const h = kanaStats('h'), k = kanaStats('k'), pct = Math.round((h.seen + k.seen) / (h.n + k.n) * 100);
     const course = lv => `<div class="card"><p class="eyebrow">JLPT ${lv.toUpperCase()} · ${UNITS[lv].length} units</p><div class="list">
-      ${UNITS[lv].map(([t,g],i) => { const ok = can(lv, i+1); return `<button class="item" data-act="${!ok ? 'lock:'+lv : lv === 'n5' ? 'unit:'+(i+1) : 'soon'}"><span class="k">${i+1}</span><div><b>${t}</b><span class="muted">${g}</span></div><span class="pill ${!ok ? 'pro' : lv === 'n5' && passed(i+1) ? 'ok' : ''}">${!ok ? (lv==='n5' ? 'N5 Pass' : 'N4 Pass') : lv === 'n5' && passed(i+1) ? 'Passed' : 'Open'}</span></button>`; }).join('')}
+      ${UNITS[lv].map(([t,g],i) => { const ok = can(lv, i+1); return `<button class="item" data-act="${!ok ? 'lock:'+lv : 'unit:'+lv+':'+(i+1)}"><span class="k">${i+1}</span><div><b>${t}</b><span class="muted">${g}</span></div><span class="pill ${!ok ? 'pro' : passed(lv, i+1) ? 'ok' : ''}">${!ok ? (lv==='n5' ? 'N5 Pass' : 'N4 Pass') : passed(lv, i+1) ? 'Passed' : 'Open'}</span></button>`; }).join('')}
     </div></div>`;
     return `<div><p class="eyebrow">Courses</p><h3>Kana first, then N5, then N4</h3></div>
     <button class="card" data-act="kana" style="text-align:left"><p class="eyebrow">Step 1 · Free</p><h3>Hiragana and Katakana</h3><div class="meter"><u style="width:${pct}%"></u></div><p class="muted">${h.seen} of ${h.n} hiragana · ${k.seen} of ${k.n} katakana learned</p></button>
     ${course('n5')}${course('n4')}`;
   },
   unit(){
-    const n = U.unit, [t, g] = UNITS.n5[n-1], u = unitItems(n), nw = u.w.filter(x => !seen(x.id)).length, nk = u.k.filter(x => !seen(x.id)).length;
-    const row = it => `<button class="item" data-say="${say(it)}"><span class="k">${it.kind === 'k5' ? it.ch : seen(it.id) ? '✓' : '·'}</span><div><b>${it.ch}${it.rd && it.rd !== it.ch ? ` <span class="muted">${it.rd}</span>` : ''}</b><span class="muted">${S.lang === 'hi' ? it.hi : it.en}</span></div></button>`;
-    return `<header style="display:flex;align-items:center;gap:8px"><button class="x" data-act="back" aria-label="Back" style="font-size:22px">←</button><h3>N5 Unit ${n}</h3></header>
+    const n = U.unit, lv = U.lv, [t, g] = UNITS[lv][n-1], u = unitItems(lv, n), nw = u.w.filter(x => !seen(x.id)).length, nk = u.k.filter(x => !seen(x.id)).length;
+    const row = it => `<button class="item" data-say="${say(it)}"><span class="k">${it.kind === 'k' ? it.ch : seen(it.id) ? '✓' : '·'}</span><div><b>${it.ch}${it.rd && it.rd !== it.ch ? ` <span class="muted">${it.rd}</span>` : ''}</b><span class="muted">${S.lang === 'hi' ? it.hi : it.en}</span></div></button>`;
+    return `<header style="display:flex;align-items:center;gap:8px"><button class="x" data-act="back" aria-label="Back" style="font-size:22px">←</button><h3>${lv.toUpperCase()} Unit ${n}</h3></header>
     <div class="card"><b>${t}</b><p class="muted">${g}</p>
       <button class="btn" data-act="ug">${u.g.some(x => !seen(x.id)) ? `Learn grammar (${u.g.length} points)` : 'Revise grammar'}</button>
       <button class="btn" data-act="uw" ${nw ? '' : 'disabled'}>${nw ? `Learn ${Math.min(6, nw)} new words` : 'All words learned'}</button>
       <button class="btn dark" data-act="uk" ${nk ? '' : 'disabled'}>${nk ? `Learn ${nk} new kanji` : 'All kanji learned'}</button>
       <button class="btn ghost" data-act="ur">Quiz me on words and kanji</button>
-      <button class="btn ghost" data-act="test:${n}">Unit test${S.tests[n] !== undefined ? ` · best ${S.tests[n]}%` : ''}</button></div>
+      <button class="btn ghost" data-act="test:${lv}:${n}">Unit test${S.tests[lv+':'+n] !== undefined ? ` · best ${S.tests[lv+':'+n]}%` : ''}</button></div>
     <div class="card"><p class="eyebrow">Grammar</p><div class="list">${u.g.map(x => `<div class="item"><span class="k">${seen(x.id) ? '✓' : '文'}</span><div><b>${x.ch}</b><span class="muted">${S.lang === 'hi' ? x.hi : x.en}</span></div></div>`).join('')}</div></div>
     <div class="card"><p class="eyebrow">Kanji · ${u.k.length - nk} of ${u.k.length} learned</p><div class="list">${u.k.map(row).join('')}</div></div>
     <div class="card"><p class="eyebrow">Words · ${u.w.length - nw} of ${u.w.length} learned · tap to hear</p><div class="list">${u.w.map(row).join('')}</div></div>`;
@@ -132,7 +139,7 @@ const V = {
       <button class="btn" data-act="pay">Get an Exam Pass</button></div>
     <div class="plan"><b>Pro</b><div class="price">₹199 <small>a month, or ₹1,499 a year</small></div><p class="muted">N5 and N4 together, plus everything added later.</p><button class="btn dark" data-act="pay">Start Pro</button></div>
     <div class="card"><p class="eyebrow">Tester tools · removed before launch</p>
-      <div class="seg"><button data-plan="free" aria-pressed="${!S.pro && !S.passes.length}">Free</button><button data-plan="n5" aria-pressed="${!S.pro && S.passes.includes('n5')}">N5 Pass</button><button data-plan="pro" aria-pressed="${S.pro}">Pro</button></div>
+      <div class="seg"><button data-plan="free" aria-pressed="${!S.pro && !S.passes.length}">Free</button><button data-plan="n5" aria-pressed="${!S.pro && S.passes.includes('n5')}">N5 Pass</button><button data-plan="n4" aria-pressed="${!S.pro && S.passes.includes('n4')}">N4 Pass</button><button data-plan="pro" aria-pressed="${S.pro}">Pro</button></div>
       <button class="btn ghost" data-act="reset">Erase progress and start over</button></div>`;
   }
 };
@@ -161,14 +168,14 @@ function listenQ(g){
   return { it:g, custom:true, say:g.jp, picked:null, opts:shuffle([{ t:g.tr, ok:true }, ...others.map(x => ({ t:x.tr, ok:false }))]),
     prompt:`<button class="btn dark" data-say="${g.jp}" style="width:auto;align-self:center">▶ Play the sentence</button><p class="muted center">Listen. What does it mean?</p>`, why:`<b>${g.tok.map(t => t[0]).join(' ')}</b> ${g.tr}` };
 }
-function startTest(n){
-  const u = unitItems(n), lq = shuffle(u.g).slice(0, 2);
+function startTest(lv, n){
+  const u = unitItems(lv, n), lq = shuffle(u.g).slice(0, 2);
   const qs = [...u.g.map(gramQ), ...lq.map(listenQ), ...shuffle([...u.w, ...u.k]).slice(0, 10 - u.g.length - lq.length).map(mkQ)];
-  L = { items:[], title:'Unit test', phase:'quiz', test:n, qs:shuffle(qs), i:0, right:0 }; L.total = L.qs.length; draw();
+  L = { items:[], title:'Unit test', phase:'quiz', test:lv + ':' + n, tn:n, qs:shuffle(qs), i:0, right:0 }; L.total = L.qs.length; draw();
 }
 function mkQ(it, n){
-  if (it.kind === 'g5') return gramQ(it);
-  const others = shuffle(ALL.filter(k => k.kind === it.kind && k.script === it.script && key(k) !== key(it))).slice(0, 3);
+  if (it.kind === 'g') return gramQ(it);
+  const others = shuffle(ALL.filter(k => k.kind === it.kind && k.lv === it.lv && k.script === it.script && key(k) !== key(it))).slice(0, 3);
   return { it, toChar: n % 2 === 1, opts: shuffle([it, ...others]), picked: null };
 }
 function toQuiz(){ L.phase = 'quiz'; L.qs = shuffle(L.items).slice(0, 12).map(mkQ); L.i = 0; L.right = 0; L.total = L.qs.length; draw(); }
@@ -178,7 +185,7 @@ function draw(){
   if (L.phase === 'cards') {
     const it = L.items[L.i];
     h = `${head(L.i / L.items.length / 2)}<span class="pill" style="align-self:center">${L.title} · new</span><div class="grow"></div>
-      ${it.kind === 'g5' ? `<h3 class="center">${it.ch}</h3><div class="card"><div class="bridge">${it.tok.map(([j, h, p]) => `<div class="tok ${p ? 'p' : ''}"><b>${j}</b><span>${h}</span></div>`).join('')}</div><p class="note">${S.lang === 'hi' ? it.hi : it.en}</p><p class="muted">In English: "${it.tr}"</p></div>
+      ${it.kind === 'g' ? `<h3 class="center">${it.ch}</h3><div class="card"><div class="bridge">${it.tok.map(([j, h, p]) => `<div class="tok ${p ? 'p' : ''}"><b>${j}</b><span>${h}</span></div>`).join('')}</div><p class="note">${S.lang === 'hi' ? it.hi : it.en}</p><p class="muted">In English: "${it.tr}"</p></div>
       <button class="btn ghost" data-say="${it.jp}" style="width:auto;align-self:center">▶ Hear it</button>`
       : `<p class="big ${sz(it)}">${it.ch}</p>${rdline(it)}<p class="mid">${ans(it)}</p>
       <button class="btn ghost" data-say="${say(it)}" style="width:auto;align-self:center">▶ Hear it</button>`}<div class="grow"></div>
@@ -187,12 +194,12 @@ function draw(){
     const q = L.qs[L.i], done = q.picked !== null;
     h = `${head(L.fromCards ? .5 + L.i / L.qs.length / 2 : L.i / L.qs.length)}<div class="grow"></div>
       ${q.custom ? `${q.prompt}<div class="opts ${q.say ? 'one' : ''}">${q.opts.map((o, k) => `<button class="opt ${done ? (o.ok ? 'right' : k === q.picked ? 'wrong' : '') : ''}" data-pick="${k}" ${done ? 'disabled' : ''}>${o.t}</button>`).join('')}</div>${done ? `<div class="fb">${q.why}</div>` : ''}`
-      : `      ${q.toChar ? `<p class="mid">${ans(q.it)}</p><p class="muted center">${q.it.kind === 'kana' ? 'Which kana makes this sound?' : 'Which one means this?'}</p>` : `<p class="big ${sz(q.it)}">${q.it.ch}</p>${q.it.kind === 'w5' ? rdline(q.it) : ''}<p class="muted center">${q.it.kind === 'kana' ? 'Which sound is this?' : 'What does this mean?'}</p>`}
+      : `      ${q.toChar ? `<p class="mid">${ans(q.it)}</p><p class="muted center">${q.it.kind === 'kana' ? 'Which kana makes this sound?' : 'Which one means this?'}</p>` : `<p class="big ${sz(q.it)}">${q.it.ch}</p>${q.it.kind === 'w' ? rdline(q.it) : ''}<p class="muted center">${q.it.kind === 'kana' ? 'Which sound is this?' : 'What does this mean?'}</p>`}
       <div class="opts">${q.opts.map((o,k) => `<button class="opt ${q.toChar ? 'jp '+sz(o) : ''} ${done ? (o === q.it ? 'right' : k === q.picked ? 'wrong' : '') : ''}" data-pick="${k}" ${done ? 'disabled' : ''}>${q.toChar ? o.ch : ans(o)}</button>`).join('')}</div>`}
       <div class="grow"></div>${done ? `<button class="btn" data-act="nextq">${L.i + 1 < L.qs.length ? 'Next' : 'Finish'}</button>` : '<div style="height:46px"></div>'}`;
   } else {
     h = `<header><button class="x" data-act="close" aria-label="Close">✕</button><b>Session complete</b></header><div class="grow"></div>
-      ${L.test ? `<p class="center"><span class="pill ${passed(L.test) && L.pc >= 70 ? 'ok' : 'pro'}">${L.pc >= 70 ? 'Unit ' + L.test + ' passed' : '70% needed to pass. Revise and try again.'}</span></p>` : ''}
+      ${L.test ? `<p class="center"><span class="pill ${L.pc >= 70 ? 'ok' : 'pro'}">${L.pc >= 70 ? 'Unit ' + L.tn + ' passed' : '70% needed to pass. Revise and try again.'}</span></p>` : ''}
       <p class="big" style="font-size:72px">${L.right} / ${L.total}</p><p class="center">Streak: <b>${liveStreak()}</b> ${liveStreak() === 1 ? 'day' : 'days'}</p>
       <p class="muted center">What you missed comes back today. What you knew returns after a longer gap each time.</p><div class="grow"></div>
       <button class="btn" data-act="close">Done</button>`;
@@ -209,7 +216,7 @@ $('#app').addEventListener('click', e => {
   if (d.tab) { U.tab = d.tab; U.view = null; $('#over').innerHTML = ''; render(); $('#screen').scrollTop = 0; return; }
   if (d.set) { const [k, v] = d.set.split(':'); S[k] = v; save(); return render(); }
   if (d.script) { U.script = d.script; return render(); }
-  if (d.plan) { S.pro = d.plan === 'pro'; S.passes = d.plan === 'n5' ? ['n5'] : []; save(); return render(); }
+  if (d.plan) { S.pro = d.plan === 'pro'; S.passes = d.plan === 'n5' || d.plan === 'n4' ? [d.plan] : []; save(); return render(); }
   if (d.pick !== undefined) {
     const q = L.qs[L.i]; q.picked = +d.pick; const ok = q.custom ? q.opts[q.picked].ok : q.opts[q.picked] === q.it;
     if (!L.test && !q.say) grade(q.it.id, ok);
@@ -224,13 +231,13 @@ $('#app').addEventListener('click', e => {
     case 'row': startRow(a1, a2); break;
     case 'card': L.i++; L.i < L.items.length ? draw() : toQuiz(); break;
     case 'review': startQuiz(dueAll(), 'Review'); break;
-    case 'next': { const st = nextStep(); if (st && st.kind === 'set') startSet(st.items, 'N5 Unit ' + st.n); break; }
-    case 'unit': U.view = 'unit'; U.unit = +a1; render(); $('#screen').scrollTop = 0; break;
-    case 'uw': startSet(unitItems(U.unit).w.filter(x => !seen(x.id)).slice(0, 6), 'N5 Unit ' + U.unit); break;
-    case 'uk': startSet(unitItems(U.unit).k.filter(x => !seen(x.id)), 'N5 Unit ' + U.unit); break;
-    case 'ug': { const g = unitItems(U.unit).g, n = g.filter(x => !seen(x.id)); startSet(n.length ? n : g, 'N5 Unit ' + U.unit); break; }
-    case 'test': startTest(+a1); break;
-    case 'ur': { const u = unitItems(U.unit); startQuiz([...u.w, ...u.k].filter(x => seen(x.id)), 'Review'); break; }
+    case 'next': { const st = nextStep(); if (st && st.kind === 'set') startSet(st.items, st.lv.toUpperCase() + ' Unit ' + st.n); break; }
+    case 'unit': U.view = 'unit'; U.lv = a1; U.unit = +a2; render(); $('#screen').scrollTop = 0; break;
+    case 'uw': startSet(unitItems(U.lv, U.unit).w.filter(x => !seen(x.id)).slice(0, 6), U.lv.toUpperCase() + ' Unit ' + U.unit); break;
+    case 'uk': startSet(unitItems(U.lv, U.unit).k.filter(x => !seen(x.id)), U.lv.toUpperCase() + ' Unit ' + U.unit); break;
+    case 'ug': { const g = unitItems(U.lv, U.unit).g, n = g.filter(x => !seen(x.id)); startSet(n.length ? n : g, U.lv.toUpperCase() + ' Unit ' + U.unit); break; }
+    case 'test': startTest(a1, +a2); break;
+    case 'ur': { const u = unitItems(U.lv, U.unit); startQuiz([...u.w, ...u.k].filter(x => seen(x.id)), 'Review'); break; }
     case 'quizall': startQuiz(KANA.filter(k => k.script === U.script && seen(k.id)), 'Review'); break;
     case 'nextq': L.i++; if (L.i < L.qs.length) draw(); else { if (L.test) { L.pc = Math.round(L.right / L.total * 100); S.tests[L.test] = Math.max(S.tests[L.test] || 0, L.pc); save(); } markStudy(); L.phase = 'done'; draw(); render(); } break;
     case 'close': $('#over').innerHTML = ''; render(); break;
