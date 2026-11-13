@@ -28,8 +28,8 @@ Browser preview: artifact "Mikomi JLPT App". This file lives in the repo and is 
 |---|---|---|
 | 9 | Journey map (units are stations, Narita to Hakata; stamp per passed unit), XP + daily goal, streak freeze, Daru the daruma mascot, unit tests as boss battles (7 hits to win, 4 lives) | Done (13 Nov 2026) |
 | 10 | Play tab with five games from existing content: Kana Rain, Particle Ninja, Sentence Builder, Kanji Pairs, 60-second Blitz; best scores; games earn XP and count for the streak | Done (13 Nov 2026) |
-| 11 | "Learn with a Sensei": live classes section with website details, free demo booking via WhatsApp with level/score prefilled, smart prompts (two failed battles, low Mikomi Score, end of free units, after a mock); recorded course card (Rs 5,000/year, includes Pro, Coming soon, "Notify me" via WhatsApp) | Next; needs nothing from Alok |
-| 12 | Share cards (streak, stamp, mock score) for Instagram/WhatsApp, friend challenge link, level certificate, study plan to exam day | Pending |
+| 11 | "Learn with a Sensei": live classes section with website details, free demo booking via WhatsApp with level/score prefilled, smart prompts (two failed battles, low Mikomi Score, end of free units, after a mock); recorded course card (Rs 5,000/year, includes Pro, Coming soon, "Notify me" via WhatsApp) | Done (13 Nov 2026); WhatsApp hand-off not yet tried on a phone |
+| 12 | Share cards (streak, stamp, mock score) for Instagram/WhatsApp, friend challenge link, level certificate, study plan to exam day | Next; needs nothing from Alok |
 | 13 | Google sign-in + cloud sync, weekly leagues, monthly All-India Mikomi Mock | Blocked: Firebase project |
 | 14 | Recorded course player, notes, doubts box (12-hour reply promise) | Blocked: videos, hosting choice, Firebase |
 | 15 | Payments: Exam Pass, Pro, recorded course | Blocked: Play Console account |

@@ -74,6 +74,18 @@ function boss(){
   return `<div class="boss"><span class="oni ${L.hit ? 'shake' : ''}">👹</span><div style="flex:1"><div style="display:flex;justify-content:space-between;font-size:12px"><b>Oni of ${stnOf(L.test)[1]}</b><span>${hp} HP</span></div><div class="meter"><u style="width:${hp / 7 * 100}%"></u></div></div><span class="hearts" aria-label="${hearts} lives left">${'♥'.repeat(hearts)}${'♡'.repeat(4 - hearts)}</span></div>`;
 }
 
+/* ---------- Mikomi Institute: live classes and the recorded course ---------- */
+const INST = { wa:'918178795615', waShow:'+91 81787 95615', mail:'contactatmikomi@gmail.com', fee:{ n5:'18,000', n4:'19,000' } };
+const stampCount = () => ['n5','n4'].reduce((a, lv) => a + UNITS[lv].filter((_, i) => passed(lv, i+1)).length, 0);
+// WhatsApp link with the learner's details filled in, so the counsellor starts with context.
+function wa(kind){
+  const lv = curLv().toUpperCase(), m = mikomi(curLv()), who = S.name ? `I'm ${S.name} and ` : '';
+  const ask = { demo:`I'd like to book a free demo class for ${lv} live classes.`, talk:`I'd like a free counselling call about learning Japanese.`, rec:`Please notify me when the ${lv} recorded course (Rs 5,000 for 1 year) is available.` }[kind];
+  const txt = `Hi Mikomi Institute! ${who}I use the Mikomi app. ${ask}\nLevel: ${lv} · Target exam: ${S.exam}\nApp progress: ${stampCount()} of 42 stations cleared${m ? `, Mikomi Score ${m.pct}%` : ''}.`;
+  return `https://wa.me/${INST.wa}?text=${encodeURIComponent(txt)}`;
+}
+const pitch = (title, text) => `<div class="card"><div class="greet">${daru('happy', 44)}<div><b>${title}</b><p class="muted">${text}</p></div></div><button class="btn dark" data-act="sensei">See live classes · free demo</button></div>`;
+
 /* ---------- mock exams and the Mikomi Score ---------- */
 const PASS = { n5:80, n4:90 }, MOCKS = { n5:6, n4:8 }, MINS = { n5:35, n4:40 };
 // Pass chance from the last three mocks (recent ones weigh more), cut down when a section is near or under its cut-off.
@@ -90,7 +102,7 @@ function scoreCard(){
   if (!m) return `<div class="card"><p class="eyebrow">Mikomi Score</p><b>Take a mock exam to see your pass chance</b><p class="muted">${cov}% of the ${LV} syllabus learned so far.</p><button class="btn ghost" data-tab="mock">Go to mock exams</button></div>`;
   const weak = m.lis / 60 < m.lang / 120 ? `Listening (${m.lis} / 60, cut-off 19)` : `Language and reading (${m.lang} / 120, cut-off 38)`;
   return `<div class="card"><p class="eyebrow">Mikomi Score · ${LV}</p><div style="display:flex;align-items:baseline;gap:10px"><span class="price" style="font-size:44px;color:${m.pct >= 60 ? 'var(--good)' : 'var(--shu)'}">${m.pct}%</span><b>pass chance</b></div>
-    <p class="muted">Projected ${m.total} / 180 from your last ${m.n === 1 ? 'mock' : m.n + ' mocks'}. Pass mark ${PASS[lv]}. Weakest: ${weak}. ${cov}% of the syllabus learned.</p></div>`;
+    <p class="muted">Projected ${m.total} / 180 from your last ${m.n === 1 ? 'mock' : m.n + ' mocks'}. Pass mark ${PASS[lv]}. Weakest: ${weak}. ${cov}% of the syllabus learned.</p>${m.pct < 40 ? `<button class="btn ghost" data-act="sensei">Under 40%. See how a Sensei can help</button>` : ''}</div>`;
 }
 function rng(a){ return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 // Mock n of a level is always the same paper: questions are drawn from the content bank with a fixed seed.
@@ -132,6 +144,7 @@ function resultView(){
     <p class="muted center">Pass mark ${PASS[r.lv]}. This is an estimate: the real JLPT scales marks differently.</p>
     <div class="card">${bar('Language knowledge and reading', r.lang, 120, 38)}${bar('Listening', r.lis, 60, 19)}<p class="muted">Vocabulary ${r.parts[0]} · Grammar ${r.parts[1]} · Reading ${r.parts[2]} · Listening ${r.parts[3]}</p></div>
     <div class="card"><p class="eyebrow">${wrong.length ? `Review your ${wrong.length} mistakes` : 'No mistakes'}</p><div class="list">${wrong.map(q => `<div class="item"><div><b>${q.txt}</b><span class="muted">${q.opts.find(o => o.ok).t}</span></div></div>`).join('')}</div></div>
+    ${r.pass ? pitch('Well done. Want to go further, faster?', 'Live classes with Astha Sensei cover speaking, interviews and the next level.') : pitch('Want a teacher to fix these with you?', 'Astha Sensei goes through mistakes like these in small live batches. The first demo class is free.')}
     <button class="btn" data-act="close">Done</button>`;
 }
 
@@ -167,7 +180,8 @@ const V = {
     return `<div class="greet">${daru(goalMet ? 'cheer' : 'happy', 68)}<div><p class="eyebrow">Target ${esc(S.exam)} · こんにちは、${esc(S.name || 'がくせい')}さん</p><p class="bubble">${say}</p><div class="meter"><u style="width:${Math.min(100, xp / S.goal * 100)}%"></u></div></div></div>
     <div class="hero"><p class="eyebrow">Today</p><h3>${title}</h3><p class="muted">${sub}</p>${btn}</div>
     <div class="stats"><div><b>${liveStreak()}</b><span>day streak${S.freezes ? ` · ${S.freezes} ${S.freezes > 1 ? 'freezes' : 'freeze'}` : ''}</span></div><div><b>${xp}<small> / ${S.goal}</small></b><span>XP today</span></div><div><b>${due.length}</b><span>reviews due</span></div></div>
-    ${scoreCard()}`;
+    ${scoreCard()}
+    <button class="card game" data-act="sensei"><span class="k">師</span><div><b>Learn with a Sensei</b><span class="muted">Live classes at Mikomi Institute · free demo class</span></div><span class="pill pro">Live</span></button>`;
   },
   learn(){
     const h = kanaStats('h'), k = kanaStats('k'), pct = Math.round((h.seen + k.seen) / (h.n + k.n) * 100), st = nextStep();
@@ -204,6 +218,21 @@ const V = {
       <button class="kgo" data-act="row:${s}:${r.name}">${r.items.every(k => seen(k.id)) ? 'Redo' : 'Learn'}</button></div>`).join('')}</div>
     <button class="btn dark" data-act="quizall">Quiz me on what I know</button>`;
   },
+  sensei(){
+    const lv = curLv(), LV = lv.toUpperCase(), li = a => `<ul class="ticks">${a.map(x => `<li>${x}</li>`).join('')}</ul>`;
+    return `<header style="display:flex;align-items:center;gap:8px"><button class="x" data-act="back" aria-label="Back" style="font-size:22px">←</button><h3>Learn with a Sensei</h3></header>
+    <div class="hero"><p class="eyebrow">Mikomi Institute of Japanese Language</p><h3>Stuck, or want to go faster? Learn live with Astha Sensei.</h3><p class="muted">Astha Pokhriyal, founder and lead instructor. JLPT N2 certified, 6+ years of teaching.</p>
+      <a class="btn" href="${wa('demo')}" target="_blank" rel="noopener">Book a free demo class on WhatsApp</a><p class="muted">WhatsApp ${INST.waShow} · ${INST.mail}</p></div>
+    <div class="plan best"><span class="pill pro">Live classes</span><b>${LV} live batch</b><div class="price">₹${INST.fee[lv]} <small>for the full level, 3 to 5 months</small></div>
+      ${li(['Live, interactive online classes in small batches', 'Weekend and evening batches', 'Recordings of every class', 'Study material, assignments and practice tests', 'Mock interviews and doubt sessions', 'JLPT preparation'])}
+      <p class="muted">${lv === 'n5' ? 'N4 batch ₹19,000' : 'N5 batch ₹18,000'} · N3 ₹21,000 · N2 ₹22,000</p>
+      <a class="btn dark" href="${wa('demo')}" target="_blank" rel="noopener">Book a free demo class</a><a class="btn ghost" href="${wa('talk')}" target="_blank" rel="noopener">Free counselling call</a></div>
+    <div class="plan"><span class="pill">Coming soon</span><b>${LV} recorded course</b><div class="price">₹5,000 <small>for 1 year</small></div>
+      ${li(['The full level as a video playlist, lesson by lesson', 'Pro included: every lesson, game and mock in this app', 'Ask a doubt under any video, answered within 12 hours', 'Notes for each lesson'])}
+      <a class="btn ghost" href="${wa('rec')}" target="_blank" rel="noopener">Notify me on WhatsApp</a></div>
+    <div class="card"><p class="eyebrow">Which one is for me?</p><div class="list">
+      ${[['独','This app','Self-study at your own pace. Free to start, Exam Pass ₹499.'],['録','Recorded course','A teacher explains everything on video, with doubts answered. ₹5,000 a year.'],['師','Live classes','A teacher, classmates and a fixed schedule. Best if you need to pass on the first attempt.']].map(([k,t,d]) => `<div class="item"><span class="k">${k}</span><div><b>${t}</b><span class="muted">${d}</span></div></div>`).join('')}</div></div>`;
+  },
   play(){
     const card = (id, jp, name, desc, unit) => `<button class="card game" data-act="game:${id}"><span class="k">${jp}</span><div><b>${name}</b><span class="muted">${desc}</span></div>${S.best[id] ? `<span class="pill ok">Best ${S.best[id]}${unit || ''}</span>` : ''}</button>`;
     return `<div class="greet">${daru('cheer', 60)}<div><p class="eyebrow">Play</p><h3>Games that count as study</h3><p class="muted">Every game uses what you have learned so far and earns XP.</p></div></div>
@@ -230,6 +259,8 @@ const V = {
     <div class="plan ${has('n5') && has('n4') ? '' : 'best'}"><b>Exam Pass</b><div class="price">₹499 <small>per level, valid until exam day</small></div><p class="muted">Every lesson and mock for one level, the Mikomi Score and weak-area drills.</p>
       <button class="btn" data-act="pay">Get an Exam Pass</button></div>
     <div class="plan"><b>Pro</b><div class="price">₹199 <small>a month, or ₹1,499 a year</small></div><p class="muted">N5 and N4 together, plus everything added later.</p><button class="btn dark" data-act="pay">Start Pro</button></div>
+    <div class="plan"><span class="pill">Coming soon</span><b>Recorded course</b><div class="price">₹5,000 <small>for 1 year, Pro included</small></div><p class="muted">The full level on video, with doubts answered within 12 hours.</p><button class="btn ghost" data-act="sensei">See details</button></div>
+    <div class="plan"><span class="pill pro">Live</span><b>Live classes with Astha Sensei</b><div class="price">from ₹18,000 <small>per level</small></div><p class="muted">Small live batches at Mikomi Institute. The first demo class is free.</p><button class="btn ghost" data-act="sensei">See batches · free demo</button></div>
     <div class="card"><p class="eyebrow">Tester tools · removed before launch</p>
       <div class="seg"><button data-plan="free" aria-pressed="${!S.pro && !S.passes.length}">Free</button><button data-plan="n5" aria-pressed="${!S.pro && S.passes.includes('n5')}">N5 Pass</button><button data-plan="n4" aria-pressed="${!S.pro && S.passes.includes('n4')}">N4 Pass</button><button data-plan="pro" aria-pressed="${S.pro}">Pro</button></div>
       <button class="btn ghost" data-act="reset">Erase progress and start over</button></div>`;
@@ -241,9 +272,9 @@ function render(){
   $('#screen').innerHTML = V[v]();
   $('#nav').innerHTML = S.onboarded ? TABS.map(([id,jp,en]) => `<button data-tab="${id}" aria-current="${!U.view && U.tab===id}"><b>${jp}</b>${en}</button>`).join('') : '';
 }
-function sheet(title, text, cta){
+function sheet(title, text, cta, extra = ''){
   if (!$('#over').innerHTML) hpush();
-  $('#over').innerHTML = `<div class="over sheet"><div class="card"><h3>${title}</h3><p class="muted">${text}</p>${cta ? `<button class="btn" data-act="plans">${cta}</button>` : ''}<button class="btn ghost" data-act="close">Close</button></div></div>`;
+  $('#over').innerHTML = `<div class="over sheet"><div class="card"><h3>${title}</h3><p class="muted">${text}</p>${cta ? `<button class="btn" data-act="plans">${cta}</button>` : ''}${extra}<button class="btn ghost" data-act="close">Close</button></div></div>`;
 }
 // Hardware back button on Android closes the open lesson or sub-screen instead of leaving the app.
 let skipPop = false;
@@ -308,7 +339,7 @@ function draw(){
       ${L.test ? `<p class="center"><span class="pill ${L.pc >= 70 ? 'ok' : 'pro'}">${L.pc >= 70 ? 'Oni defeated. Stamp earned: ' + stnOf(L.test).join(' ') : 'The oni won this round. Revise the unit and try again.'}</span></p>` : ''}
       <div class="center">${L.test && L.pc >= 70 ? `<span class="stamp big-stamp">${stnOf(L.test)[0]}</span>` : daru(L.test ? 'sad' : 'cheer', 96)}</div>
       <p class="big" style="font-size:56px">${L.right} / ${L.total}</p><p class="center">+${L.xp || 0} XP · Streak: <b>${liveStreak()}</b> ${liveStreak() === 1 ? 'day' : 'days'}</p>
-      <p class="muted center">What you missed comes back today. What you knew returns after a longer gap each time.</p><div class="grow"></div>
+      <p class="muted center">What you missed comes back today. What you knew returns after a longer gap each time.</p>${L.test && L.pc < 70 && S.fails[L.test] >= 2 ? pitch(`Stuck at ${stnOf(L.test)[1]}?`, 'Two tries and the oni is still standing. Astha Sensei can clear this topic in one live class.') : ''}<div class="grow"></div>
       <button class="btn" data-act="close">Done</button>`;
   }
   $('#over').innerHTML = `<div class="over">${h}</div>`;
@@ -438,12 +469,14 @@ $('#app').addEventListener('click', e => {
     case 'test': startTest(a1, +a2); break;
     case 'ur': { const u = unitItems(U.lv, U.unit); startQuiz([...u.w, ...u.k].filter(x => seen(x.id)), 'Review'); break; }
     case 'quizall': startQuiz(KANA.filter(k => k.script === U.script && seen(k.id)), 'Review'); break;
-    case 'nextq': L.hit = false; L.i++; if (L.i < L.qs.length && !(L.test && L.miss >= 4)) draw(); else { if (L.test) { L.pc = Math.round(L.right / L.total * 100); S.tests[L.test] = Math.max(S.tests[L.test] || 0, L.pc); save(); } gain(L.test && L.pc >= 70 ? 30 : 10); markStudy(); L.phase = 'done'; draw(); render(); } break;
+    case 'nextq': L.hit = false; L.i++; if (L.i < L.qs.length && !(L.test && L.miss >= 4)) draw(); else { if (L.test) { L.pc = Math.round(L.right / L.total * 100); S.tests[L.test] = Math.max(S.tests[L.test] || 0, L.pc); S.fails[L.test] = L.pc >= 70 ? 0 : (S.fails[L.test] || 0) + 1; save(); } gain(L.test && L.pc >= 70 ? 30 : 10); markStudy(); L.phase = 'done'; draw(); render(); } break;
     case 'close': hback(); clearInterval(tick); $('#over').innerHTML = ''; render(); break;
     case 'mock': startMock(a1, +a2); break;
     case 'game': startGame(a1); break;
+    case 'sensei': { const ov = !!$('#over').innerHTML, had = !!U.view; if (ov) { hback(); clearInterval(tick); $('#over').innerHTML = ''; }
+      U.view = 'sensei'; if (!had) ov ? setTimeout(hpush, 80) : hpush(); render(); $('#screen').scrollTop = 0; break; }
     case 'soon': sheet('Opening in the next update', 'This unit is part of your plan. Its lessons are being written now.'); break;
-    case 'lock': sheet(`This needs the ${a1.toUpperCase()} Exam Pass`, `Kana, N5 units 1 to 5, N4 unit 1 and the first mock of each level are free. The Exam Pass (₹499) opens all of ${a1.toUpperCase()} until exam day. Pro opens both levels.`, 'See plans'); break;
+    case 'lock': sheet(`This needs the ${a1.toUpperCase()} Exam Pass`, `Kana, N5 units 1 to 5, N4 unit 1 and the first mock of each level are free. The Exam Pass (₹499) opens all of ${a1.toUpperCase()} until exam day. Pro opens both levels.`, 'See plans', '<button class="btn dark" data-act="sensei">Prefer a teacher? See live classes</button>'); break;
     case 'plans': hback(); $('#over').innerHTML = ''; U.tab = 'me'; U.view = null; render(); break;
     case 'pay': sheet('Payments are not switched on yet', 'Purchases through Google Play arrive in a later update. Use the tester tools below to preview a paid plan.'); break;
     case 'reset': reset(); U.tab = 'today'; U.view = null; render(); break;
