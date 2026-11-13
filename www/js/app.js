@@ -212,9 +212,22 @@ function render(){
   $('#nav').innerHTML = S.onboarded ? TABS.map(([id,jp,en]) => `<button data-tab="${id}" aria-current="${!U.view && U.tab===id}"><b>${jp}</b>${en}</button>`).join('') : '';
 }
 function sheet(title, text, cta){
+  if (!$('#over').innerHTML) hpush();
   $('#over').innerHTML = `<div class="over sheet"><div class="card"><h3>${title}</h3><p class="muted">${text}</p>${cta ? `<button class="btn" data-act="plans">${cta}</button>` : ''}<button class="btn ghost" data-act="close">Close</button></div></div>`;
 }
-function speak(t){ try { const u = new SpeechSynthesisUtterance(t); u.lang = 'ja-JP'; u.rate = .8; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) {} }
+// Hardware back button on Android closes the open lesson or sub-screen instead of leaving the app.
+let skipPop = false;
+const hpush = () => { try { history.pushState({ m:1 }, ''); } catch (e) {} };
+const hback = () => { try { if (history.state && history.state.m) { skipPop = true; history.back(); } } catch (e) {} };
+window.addEventListener('popstate', () => {
+  if (skipPop) { skipPop = false; return; }
+  if ($('#over').innerHTML) { clearInterval(tick); $('#over').innerHTML = ''; render(); } else if (U.view) { U.view = null; render(); }
+});
+function speak(t){
+  // Inside the Android app the system text-to-speech plugin is used; browsers use the Web Speech API.
+  const tts = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.TextToSpeech;
+  if (tts) { tts.stop().catch(() => {}).then(() => tts.speak({ text:t, lang:'ja-JP', rate:0.8 })).catch(() => {}); return; }
+  try { const u = new SpeechSynthesisUtterance(t); u.lang = 'ja-JP'; u.rate = .8; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) {} }
 
 /* ---------- lesson: flashcards, then quiz ---------- */
 let L = null;
@@ -242,6 +255,7 @@ function mkQ(it, n){
 }
 function toQuiz(){ L.phase = 'quiz'; L.qs = shuffle(L.items).slice(0, 12).map(mkQ); L.i = 0; L.right = 0; L.total = L.qs.length; draw(); }
 function draw(){
+  if (!$('#over').innerHTML) hpush();
   const head = p => `<header><button class="x" data-act="close" aria-label="Close">✕</button><div class="prog"><u style="width:${p*100}%"></u></div>${L.exam ? `<b id="clock">${fmt(L.left)}</b>` : ''}</header>`;
   let h;
   if (L.phase === 'cards') {
@@ -289,13 +303,13 @@ $('#app').addEventListener('click', e => {
   const [act, a1, a2] = (d.act || '').split(':');
   switch (act) {
     case 'begin': S.onboarded = true; save(); U.tab = S.start === 'kana' ? 'today' : 'learn'; render(); break;
-    case 'kana': U.view = 'kana'; render(); $('#screen').scrollTop = 0; break;
-    case 'back': U.view = null; render(); break;
+    case 'kana': hpush(); U.view = 'kana'; render(); $('#screen').scrollTop = 0; break;
+    case 'back': hback(); U.view = null; render(); break;
     case 'row': startRow(a1, a2); break;
     case 'card': L.i++; L.i < L.items.length ? draw() : toQuiz(); break;
     case 'review': startQuiz(dueAll(), 'Review'); break;
     case 'next': { const st = nextStep(); if (st && st.kind === 'set') startSet(st.items, st.lv.toUpperCase() + ' Unit ' + st.n); break; }
-    case 'unit': U.view = 'unit'; U.lv = a1; U.unit = +a2; render(); $('#screen').scrollTop = 0; break;
+    case 'unit': hpush(); U.view = 'unit'; U.lv = a1; U.unit = +a2; render(); $('#screen').scrollTop = 0; break;
     case 'uw': startSet(unitItems(U.lv, U.unit).w.filter(x => !seen(x.id)).slice(0, 6), U.lv.toUpperCase() + ' Unit ' + U.unit); break;
     case 'uk': startSet(unitItems(U.lv, U.unit).k.filter(x => !seen(x.id)), U.lv.toUpperCase() + ' Unit ' + U.unit); break;
     case 'ug': { const g = unitItems(U.lv, U.unit).g, n = g.filter(x => !seen(x.id)); startSet(n.length ? n : g, U.lv.toUpperCase() + ' Unit ' + U.unit); break; }
@@ -303,11 +317,11 @@ $('#app').addEventListener('click', e => {
     case 'ur': { const u = unitItems(U.lv, U.unit); startQuiz([...u.w, ...u.k].filter(x => seen(x.id)), 'Review'); break; }
     case 'quizall': startQuiz(KANA.filter(k => k.script === U.script && seen(k.id)), 'Review'); break;
     case 'nextq': L.i++; if (L.i < L.qs.length) draw(); else { if (L.test) { L.pc = Math.round(L.right / L.total * 100); S.tests[L.test] = Math.max(S.tests[L.test] || 0, L.pc); save(); } markStudy(); L.phase = 'done'; draw(); render(); } break;
-    case 'close': clearInterval(tick); $('#over').innerHTML = ''; render(); break;
+    case 'close': hback(); clearInterval(tick); $('#over').innerHTML = ''; render(); break;
     case 'mock': startMock(a1, +a2); break;
     case 'soon': sheet('Opening in the next update', 'This unit is part of your plan. Its lessons are being written now.'); break;
     case 'lock': sheet(`This needs the ${a1.toUpperCase()} Exam Pass`, `Kana, N5 units 1 to 5, N4 unit 1 and the first mock of each level are free. The Exam Pass (₹499) opens all of ${a1.toUpperCase()} until exam day. Pro opens both levels.`, 'See plans'); break;
-    case 'plans': $('#over').innerHTML = ''; U.tab = 'me'; U.view = null; render(); break;
+    case 'plans': hback(); $('#over').innerHTML = ''; U.tab = 'me'; U.view = null; render(); break;
     case 'pay': sheet('Payments are not switched on yet', 'Purchases through Google Play arrive in a later update. Use the tester tools below to preview a paid plan.'); break;
     case 'reset': reset(); U.tab = 'today'; U.view = null; render(); break;
   }
