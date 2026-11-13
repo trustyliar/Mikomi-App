@@ -29,7 +29,7 @@ Browser preview: artifact "Mikomi JLPT App". This file lives in the repo and is 
 | 9 | Journey map (units are stations, Narita to Hakata; stamp per passed unit), XP + daily goal, streak freeze, Daru the daruma mascot, unit tests as boss battles (7 hits to win, 4 lives) | Done (13 Nov 2026) |
 | 10 | Play tab with five games from existing content: Kana Rain, Particle Ninja, Sentence Builder, Kanji Pairs, 60-second Blitz; best scores; games earn XP and count for the streak | Done (13 Nov 2026) |
 | 11 | "Learn with a Sensei": live classes section with website details, free demo booking via WhatsApp with level/score prefilled, smart prompts (two failed battles, low Mikomi Score, end of free units, after a mock); recorded course card (Rs 5,000/year, includes Pro, Coming soon, "Notify me" via WhatsApp) | Done (13 Nov 2026); WhatsApp hand-off not yet tried on a phone |
-| 12 | Share cards (streak, stamp, mock score) for Instagram/WhatsApp, friend challenge link, level certificate, study plan to exam day | Next; needs nothing from Alok |
+| 12 | Share cards (streak, stamp, mock score) for Instagram/WhatsApp, Friend Challenge (5-digit code gives both players the same 10 questions, shared by WhatsApp), level certificate, study plan to exam day on Today | Done (13 Nov 2026); picture sharing not yet tried on a phone |
 | 13 | Google sign-in + cloud sync, weekly leagues, monthly All-India Mikomi Mock | Blocked: Firebase project |
 | 14 | Recorded course player, notes, doubts box (12-hour reply promise) | Blocked: videos, hosting choice, Firebase |
 | 15 | Payments: Exam Pass, Pro, recorded course | Blocked: Play Console account |
@@ -63,6 +63,8 @@ Browser preview: artifact "Mikomi JLPT App". This file lives in the repo and is 
 - XP: 2 per correct answer, 10 per session, 30 for a won battle or a finished mock, up to 20 per game. Daily goal 10/30/50. One streak freeze to start, one more per 7-day streak, max 2.
 - Games draw on items the learner has already seen, topped up with a starter set for new learners.
 - Content sources: words from open-anki-jlpt-decks (MIT), kanji from davidluzgouveia/kanji-data (MIT); Hindi meanings, grammar, reading written for Mikomi.
+- Share cards and challenge messages point to mikomiinstitute.online until the app has a Play Store link; the website should then carry the download link.
+- Study plan: new items per day = items left / (days to exam - 14). On track up to 15 a day, tight up to 30, otherwise behind (and the live classes prompt shows).
 - Backlog: Japan jobs track, speaking practice, handwriting, N3/N2, institute licences, offline mode, bigger mock question banks, recorded audio, more games (Station Announcement listening game).
 
 Rebuild data: `python3 tools/build_n5.py tools www/js/n5.js` and `python3 tools/build_n4.py tools www/js/n4.js`.

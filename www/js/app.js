@@ -1,4 +1,4 @@
-import { S, save, reset, seen, box, isDue, grade, markStudy, liveStreak, can, canMock, today, addXp, xpToday } from './store.js';
+import { S, save, reset, seen, box, isDue, grade, markStudy, liveStreak, can, canMock, today, addXp, xpToday, newToday } from './store.js';
 import { READ } from './read.js';
 import { KANA, KROWS, UNITS, STN, deva } from './data.js';
 import { N5W, N5K } from './n5.js';
@@ -64,7 +64,7 @@ const mockPassed = () => S.mocks.some(m => m.total >= PASS[m.lv] && m.lang >= 38
 // Daru is a daruma doll: one eye is painted when a goal is set, the second when it is reached (here: passing a mock exam).
 function daru(mood = 'happy', size = 64){
   const mouth = mood === 'sad' ? '<path d="M43 59q7-6 14 0" fill="none" stroke="#1b2444" stroke-width="3" stroke-linecap="round"/>' : mood === 'cheer' ? '<ellipse cx="50" cy="57" rx="6" ry="5" fill="#1b2444"/>' : '<path d="M43 55q7 6 14 0" fill="none" stroke="#1b2444" stroke-width="3" stroke-linecap="round"/>';
-  return `<svg class="daru ${mood}" width="${size}" height="${size}" viewBox="0 0 100 100" role="img" aria-label="Daru the daruma"><path d="M50 6c26 0 40 20 40 46 0 26-16 42-40 42S10 78 10 52C10 26 24 6 50 6z" fill="#d8412b"/><ellipse cx="50" cy="45" rx="28" ry="23" fill="#fbeee6"/><path d="M30 33q9-7 16-1M54 32q7-6 16 1" fill="none" stroke="#1b2444" stroke-width="4" stroke-linecap="round"/><circle cx="39" cy="43" r="6" fill="#1b2444"/><circle cx="61" cy="43" r="5.5" fill="${mockPassed() ? '#1b2444' : '#fff'}" stroke="#1b2444" stroke-width="1.5"/>${mouth}<path d="M36 76q14 9 28 0M40 84q10 6 20 0" fill="none" stroke="#f3c64b" stroke-width="3" stroke-linecap="round"/></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" class="daru ${mood}" width="${size}" height="${size}" viewBox="0 0 100 100" role="img" aria-label="Daru the daruma"><path d="M50 6c26 0 40 20 40 46 0 26-16 42-40 42S10 78 10 52C10 26 24 6 50 6z" fill="#d8412b"/><ellipse cx="50" cy="45" rx="28" ry="23" fill="#fbeee6"/><path d="M30 33q9-7 16-1M54 32q7-6 16 1" fill="none" stroke="#1b2444" stroke-width="4" stroke-linecap="round"/><circle cx="39" cy="43" r="6" fill="#1b2444"/><circle cx="61" cy="43" r="5.5" fill="${mockPassed() ? '#1b2444' : '#fff'}" stroke="#1b2444" stroke-width="1.5"/>${mouth}<path d="M36 76q14 9 28 0M40 84q10 6 20 0" fill="none" stroke="#f3c64b" stroke-width="3" stroke-linecap="round"/></svg>`;
 }
 function gain(n){ addXp(n); if (L) L.xp = (L.xp || 0) + n; }
 const stnOf = key => { const [lv, n] = key.split(':'); return STN[lv][n - 1]; };
@@ -85,6 +85,79 @@ function wa(kind){
   return `https://wa.me/${INST.wa}?text=${encodeURIComponent(txt)}`;
 }
 const pitch = (title, text) => `<div class="card"><div class="greet">${daru('happy', 44)}<div><b>${title}</b><p class="muted">${text}</p></div></div><button class="btn dark" data-act="sensei">See live classes · free demo</button></div>`;
+
+/* ---------- study plan to exam day ---------- */
+const EXAMS = { 'Dec 2026':[2026, 11], 'Jul 2027':[2027, 6], 'Dec 2027':[2027, 11] };
+// The JLPT is held on the first Sunday of July and December.
+function examDate(){ const [y, m] = EXAMS[S.exam] || EXAMS['Jul 2027'], d = new Date(y, m, 1); d.setDate(1 + (7 - d.getDay()) % 7); return d; }
+function planCard(){
+  const lv = curLv(), LV = lv.toUpperCase(), d = examDate(), days = Math.ceil((d - Date.now()) / 864e5), when = d.toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
+  if (days <= 0) return `<div class="card"><p class="eyebrow">Study plan</p><b>Your exam date (${when}) has passed.</b><button class="btn ghost" data-tab="me">Pick your next exam</button></div>`;
+  const items = ALL.filter(x => x.lv === lv), left = items.filter(x => !seen(x.id)).length, per = Math.ceil(left / Math.max(1, days - 14)), nt = newToday();
+  const st = !left ? ['ok', 'Syllabus done'] : per <= 15 ? ['ok', 'On track'] : per <= 30 ? ['', 'Tight'] : ['pro', 'Behind schedule'];
+  return `<div class="card"><p class="eyebrow">Plan to ${LV} · ${when} · ${days} days left</p><span class="pill ${st[0]}">${st[1]}</span>
+    ${left ? `<b>${per} new ${per === 1 ? 'item' : 'items'} a day gets you there</b><div class="meter"><u style="width:${Math.min(100, nt / per * 100)}%"></u></div><p class="muted">${nt} of ${per} learned today. ${left} of ${items.length} items left, with the last two weeks kept for revision and mocks.</p>` : `<b>Everything in ${LV} is learned. Keep reviewing and sit the mocks.</b>`}
+    ${st[0] === 'pro' ? `<p class="muted">That pace is hard to keep up alone. Move to a later exam in Me, or get a teacher's help.</p><button class="btn ghost" data-act="sensei">See live classes</button>` : ''}</div>`;
+}
+
+/* ---------- share cards, certificates and the friend challenge ---------- */
+const SITE = 'mikomiinstitute.online';
+async function makeCard(kind, a, b){
+  const c = document.createElement('canvas'); c.width = 1080; c.height = 1350; const x = c.getContext('2d');
+  const M = '"Shippori Mincho", serif', B = '"Zen Kaku Gothic New", sans-serif', cert = kind === 'cert', ink = cert ? '#1b2444' : '#fff', soft = cert ? '#5a6485' : '#b9c0e6';
+  const who = S.name || 'A Mikomi learner', LV = (a || curLv()).toUpperCase();
+  let big, l1, l2, text, stamp = null;
+  if (kind === 'streak') { const n = liveStreak(); big = String(n); l1 = n === 1 ? 'day streak' : 'day streak'; l2 = `${who} is learning Japanese every day`; text = `I'm on a ${n}-day streak learning Japanese with the Mikomi app!`; }
+  else if (kind === 'stamp') { const [jp, en] = STN[a][b - 1]; stamp = jp; big = en; l1 = `Station cleared on the Mikomi ${LV} Line`; l2 = `${stampCount()} of 42 stamps collected`; text = `I just cleared ${en} station on my Japanese journey with the Mikomi app! ${stampCount()} of 42 stamps collected.`; }
+  else if (kind === 'mock') { const r = L.res, m = mikomi(r.lv); big = `${r.total} / 180`; l1 = `${r.lv.toUpperCase()} Mock ${r.n}${r.pass ? ' · Pass' : ''}`; l2 = `Mikomi Score: ${m.pct}% pass chance`; text = `I scored ${r.total}/180 on a JLPT ${r.lv.toUpperCase()} mock exam in the Mikomi app.`; }
+  else { big = who; l1 = `has cleared all ${UNITS[a].length} stations of the Mikomi ${LV} Line`; l2 = new Date().toLocaleDateString('en-IN', { day:'numeric', month:'long', year:'numeric' }); text = `I completed the full JLPT ${LV} course in the Mikomi app!`; }
+  try { await Promise.race([Promise.all([document.fonts.load(`700 80px ${M}`, 'MIKOMI 見込み' + (stamp || '') + big), document.fonts.load(`500 40px ${B}`, l1 + l2)]), new Promise(r => setTimeout(r, 1500))]); } catch (e) {}
+  x.fillStyle = cert ? '#f6f1e7' : '#141b3d'; x.fillRect(0, 0, 1080, 1350);
+  if (cert) { x.strokeStyle = '#27348b'; x.lineWidth = 8; x.strokeRect(40, 40, 1000, 1270); x.lineWidth = 2; x.strokeRect(62, 62, 956, 1226); }
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  const T = (t, y, font, col = ink) => { x.font = font; x.fillStyle = col; let s = +font.match(/(\d+)px/)[1]; while (x.measureText(t).width > 940 && s > 20) { s -= 4; x.font = font.replace(/\d+px/, s + 'px'); } x.fillText(t, 540, y); };
+  T('MIKOMI 見込み', 150, `700 48px ${M}`, cert ? '#27348b' : '#fff');
+  if (cert) T('Certificate of Completion', 250, `700 64px ${M}`);
+  if (stamp) { x.save(); x.translate(540, 520); x.rotate(-0.2); x.strokeStyle = '#d8412b'; x.lineWidth = 16; x.beginPath(); x.arc(0, 0, 215, 0, 7); x.stroke(); x.lineWidth = 4; x.beginPath(); x.arc(0, 0, 190, 0, 7); x.stroke(); x.font = `700 ${[...stamp].length > 2 ? 112 : 150}px ${M}`; x.fillStyle = '#d8412b'; x.fillText(stamp, 0, 8); x.restore(); }
+  else { const img = new Image(); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(daru('cheer', 400)); try { await img.decode(); x.drawImage(img, cert ? 390 : 340, cert ? 330 : 310, cert ? 300 : 400, cert ? 300 : 400); } catch (e) {} }
+  T(big, cert ? 730 : 850, `700 ${kind === 'streak' ? 230 : cert ? 84 : 120}px ${M}`, kind === 'streak' ? '#ff7a62' : ink);
+  T(l1, cert ? 830 : 990, `500 ${cert ? 38 : 44}px ${B}`);
+  T(l2, cert ? 900 : 1060, `500 36px ${B}`, soft);
+  if (cert) T('Awarded by the Mikomi app for finishing the course. This is not a JLPT certificate.', 1150, `500 26px ${B}`, soft);
+  T('Learn Japanese through Hindi · JLPT N5 and N4', 1215, `500 30px ${B}`, soft); T(SITE, 1262, `700 32px ${B}`, '#d8412b');
+  return { url: c.toDataURL('image/png'), text: `${text} ${SITE}` };
+}
+async function openShare(kind, a, b){
+  if (!$('#over').innerHTML) hpush(); clearInterval(tick);
+  $('#over').innerHTML = `<div class="over"><p class="muted center">Making your card…</p></div>`;
+  U.share = await makeCard(kind, a, b);
+  $('#over').innerHTML = `<div class="over"><header><button class="x" data-act="close" aria-label="Close">✕</button><b>${kind === 'cert' ? 'Your certificate' : 'Share'}</b></header><img class="cardimg" src="${U.share.url}" alt="${esc(U.share.text)}">
+    <button class="btn" data-act="doshare">Share picture</button><a class="btn ghost" href="https://wa.me/?text=${encodeURIComponent(U.share.text)}" target="_blank" rel="noopener">Send as a WhatsApp message</a><p class="muted center" id="sharemsg">You can also press and hold the picture to save it.</p></div>`;
+}
+async function doShare(){
+  const { url, text } = U.share, P = window.Capacitor && window.Capacitor.Plugins, b64 = url.split(',')[1];
+  try {
+    if (P && P.Share && P.Filesystem) { const f = await P.Filesystem.writeFile({ path:'mikomi-card.png', data:b64, directory:'CACHE' }); await P.Share.share({ text, files:[f.uri] }); return; }
+    const bin = atob(b64), arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    const file = new File([arr], 'mikomi.png', { type:'image/png' });
+    if (navigator.canShare && navigator.canShare({ files:[file] })) { await navigator.share({ files:[file], text }); return; }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  const m = $('#sharemsg'); if (m) m.innerHTML = '<b>Sharing a picture is not available here.</b> Press and hold the picture to save it, or send the WhatsApp message.';
+}
+// A challenge code is the level digit plus four digits. The same code always gives the same ten questions.
+function chalSheet(){
+  if (!$('#over').innerHTML) hpush();
+  $('#over').innerHTML = `<div class="over sheet"><div class="card"><h3>Friend Challenge</h3><p class="muted">Ten questions. Send the code to a friend: they get exactly the same ten and try to beat your score.</p>
+    <button class="btn" data-act="chalnew">Start a new challenge</button>
+    <div class="field"><label for="code">Got a code from a friend?</label><input id="code" inputmode="numeric" maxlength="5" placeholder="e.g. 51234"></div>
+    <button class="btn dark" data-act="chalgo">Play this code</button><p class="muted" id="codemsg"></p><button class="btn ghost" data-act="close">Close</button></div></div>`;
+}
+function startChal(code){
+  const lv = code[0] === '4' ? 'n4' : 'n5', all = buildMock(lv, 1000 + +code.slice(1));
+  const qs = [0, 1, 2, 8, 9, 10, 11, 20, 21, 22].map(i => ({ ...all[i], why:`<b>Answer</b>${all[i].opts.find(o => o.ok).t}` }));
+  L = { items:[], title:'Challenge', phase:'quiz', chal:code, qs, i:0, right:0, total:10 }; draw();
+}
+const chalText = () => `I scored ${L.right}/10 on Mikomi challenge ${L.chal} (JLPT ${L.chal[0] === '4' ? 'N4' : 'N5'}). Can you beat me? Open the Mikomi app, go to Play, tap Friend Challenge and enter ${L.chal}. Get the app: ${SITE}`;
 
 /* ---------- mock exams and the Mikomi Score ---------- */
 const PASS = { n5:80, n4:90 }, MOCKS = { n5:6, n4:8 }, MINS = { n5:35, n4:40 };
@@ -144,6 +217,7 @@ function resultView(){
     <p class="muted center">Pass mark ${PASS[r.lv]}. This is an estimate: the real JLPT scales marks differently.</p>
     <div class="card">${bar('Language knowledge and reading', r.lang, 120, 38)}${bar('Listening', r.lis, 60, 19)}<p class="muted">Vocabulary ${r.parts[0]} · Grammar ${r.parts[1]} · Reading ${r.parts[2]} · Listening ${r.parts[3]}</p></div>
     <div class="card"><p class="eyebrow">${wrong.length ? `Review your ${wrong.length} mistakes` : 'No mistakes'}</p><div class="list">${wrong.map(q => `<div class="item"><div><b>${q.txt}</b><span class="muted">${q.opts.find(o => o.ok).t}</span></div></div>`).join('')}</div></div>
+    <button class="btn ghost" data-act="share:mock">Share this result</button>
     ${r.pass ? pitch('Well done. Want to go further, faster?', 'Live classes with Astha Sensei cover speaking, interviews and the next level.') : pitch('Want a teacher to fix these with you?', 'Astha Sensei goes through mistakes like these in small live batches. The first demo class is free.')}
     <button class="btn" data-act="close">Done</button>`;
 }
@@ -180,6 +254,7 @@ const V = {
     return `<div class="greet">${daru(goalMet ? 'cheer' : 'happy', 68)}<div><p class="eyebrow">Target ${esc(S.exam)} · こんにちは、${esc(S.name || 'がくせい')}さん</p><p class="bubble">${say}</p><div class="meter"><u style="width:${Math.min(100, xp / S.goal * 100)}%"></u></div></div></div>
     <div class="hero"><p class="eyebrow">Today</p><h3>${title}</h3><p class="muted">${sub}</p>${btn}</div>
     <div class="stats"><div><b>${liveStreak()}</b><span>day streak${S.freezes ? ` · ${S.freezes} ${S.freezes > 1 ? 'freezes' : 'freeze'}` : ''}</span></div><div><b>${xp}<small> / ${S.goal}</small></b><span>XP today</span></div><div><b>${due.length}</b><span>reviews due</span></div></div>
+    ${planCard()}
     ${scoreCard()}
     <button class="card game" data-act="sensei"><span class="k">師</span><div><b>Learn with a Sensei</b><span class="muted">Live classes at Mikomi Institute · free demo class</span></div><span class="pill pro">Live</span></button>`;
   },
@@ -240,6 +315,7 @@ const V = {
     ${card('ninja', '忍', 'Particle Ninja', '60 seconds. Pick the right particle: は, を, に, で…')}
     ${card('build', '文', 'Sentence Builder', 'Tap the tiles into order. The Hindi line is your hint.')}
     ${card('pairs', '組', 'Kanji Pairs', 'Flip the cards and match each kanji to its meaning.', ' moves')}
+    ${card('chal', '友', 'Friend Challenge', 'Ten questions, one code. Send it on WhatsApp and see who scores more.').replace('game:chal', 'chal')}
     ${card('blitz', '速', '60-second Blitz', 'How many words and kanji can you get in one minute?')}`;
   },
   mock(){
@@ -255,7 +331,11 @@ const V = {
     <div class="card"><div class="greet">${daru('happy', 56)}<p class="muted"><b style="color:var(--ink)">Daru, your daruma.</b> In Japan you paint one eye when you set a goal and the other when you reach it. Daru gets his second eye when you pass a mock exam. ${S.xp} XP earned so far.</p></div>
       <div class="field"><span class="lab">Daily goal</span><div class="seg">${[[10,'Light · 10 XP'],[30,'Regular · 30'],[50,'Serious · 50']].map(([v,t]) => `<button data-set="goal:${v}" aria-pressed="${S.goal == v}">${t}</button>`).join('')}</div></div></div>
     <div class="card"><div class="field"><span class="lab">Explain things in</span><div class="seg"><button data-set="lang:hi" aria-pressed="${S.lang==='hi'}">हिंदी</button><button data-set="lang:en" aria-pressed="${S.lang==='en'}">English</button></div></div>
+      <div class="field"><span class="lab">Target exam</span><div class="seg">${Object.keys(EXAMS).map(v => `<button data-set="exam:${v}" aria-pressed="${S.exam===v}">${v}</button>`).join('')}</div></div>
       <button class="btn ghost" disabled>Sign in with Google (coming soon)</button></div>
+    <div class="card"><p class="eyebrow">Share and certificates</p>
+      <button class="btn ghost" data-act="share:streak" ${liveStreak() ? '' : 'disabled'}>Share my ${liveStreak()}-day streak</button>
+      ${['n5','n4'].map(lv => { const n = UNITS[lv].length, dn = UNITS[lv].filter((_, i) => passed(lv, i+1)).length; return dn === n ? `<button class="btn dark" data-act="share:cert:${lv}">View my ${lv.toUpperCase()} certificate</button>` : `<p class="muted">${lv.toUpperCase()} certificate: ${dn} of ${n} stations cleared</p>`; }).join('')}</div>
     <div class="plan ${has('n5') && has('n4') ? '' : 'best'}"><b>Exam Pass</b><div class="price">₹499 <small>per level, valid until exam day</small></div><p class="muted">Every lesson and mock for one level, the Mikomi Score and weak-area drills.</p>
       <button class="btn" data-act="pay">Get an Exam Pass</button></div>
     <div class="plan"><b>Pro</b><div class="price">₹199 <small>a month, or ₹1,499 a year</small></div><p class="muted">N5 and N4 together, plus everything added later.</p><button class="btn dark" data-act="pay">Start Pro</button></div>
@@ -339,7 +419,9 @@ function draw(){
       ${L.test ? `<p class="center"><span class="pill ${L.pc >= 70 ? 'ok' : 'pro'}">${L.pc >= 70 ? 'Oni defeated. Stamp earned: ' + stnOf(L.test).join(' ') : 'The oni won this round. Revise the unit and try again.'}</span></p>` : ''}
       <div class="center">${L.test && L.pc >= 70 ? `<span class="stamp big-stamp">${stnOf(L.test)[0]}</span>` : daru(L.test ? 'sad' : 'cheer', 96)}</div>
       <p class="big" style="font-size:56px">${L.right} / ${L.total}</p><p class="center">+${L.xp || 0} XP · Streak: <b>${liveStreak()}</b> ${liveStreak() === 1 ? 'day' : 'days'}</p>
-      <p class="muted center">What you missed comes back today. What you knew returns after a longer gap each time.</p>${L.test && L.pc < 70 && S.fails[L.test] >= 2 ? pitch(`Stuck at ${stnOf(L.test)[1]}?`, 'Two tries and the oni is still standing. Astha Sensei can clear this topic in one live class.') : ''}<div class="grow"></div>
+      <p class="muted center">What you missed comes back today. What you knew returns after a longer gap each time.</p>${L.test && L.pc < 70 && S.fails[L.test] >= 2 ? pitch(`Stuck at ${stnOf(L.test)[1]}?`, 'Two tries and the oni is still standing. Astha Sensei can clear this topic in one live class.') : ''}
+      ${L.test && L.pc >= 70 ? `<button class="btn ghost" data-act="share:stamp:${L.test}">Share your stamp</button>` : ''}
+      ${L.chal ? `<div class="card"><p class="eyebrow">Challenge code</p><p class="price center">${L.chal}</p><a class="btn dark" href="https://wa.me/?text=${encodeURIComponent(chalText())}" target="_blank" rel="noopener">Challenge a friend on WhatsApp</a></div>` : ''}<div class="grow"></div>
       <button class="btn" data-act="close">Done</button>`;
   }
   $('#over').innerHTML = `<div class="over">${h}</div>`;
@@ -448,12 +530,12 @@ $('#app').addEventListener('click', e => {
   if (d.pick !== undefined) {
     const q = L.qs[L.i]; q.picked = +d.pick;
     if (L.exam) { L.i++; return L.i < L.qs.length ? draw() : finishExam(); } const ok = q.custom ? q.opts[q.picked].ok : q.opts[q.picked] === q.it;
-    if (!L.test && !q.say) grade(q.it.id, ok);
+    if (!L.test && !q.say && q.it) grade(q.it.id, ok);
     L.hit = ok; if (!ok) L.miss = (L.miss || 0) + 1;
-    if (ok) { if (!q.retry) { L.right++; gain(2); } } else if (!q.retry && !L.test) { const r = mkQ(q.it, q.toChar ? 1 : 0); r.retry = true; L.qs.push(r); }
+    if (ok) { if (!q.retry) { L.right++; gain(2); } } else if (!q.retry && !L.test && !L.chal) { const r = mkQ(q.it, q.toChar ? 1 : 0); r.retry = true; L.qs.push(r); }
     return draw();
   }
-  const [act, a1, a2] = (d.act || '').split(':');
+  const [act, a1, a2, a3] = (d.act || '').split(':');
   switch (act) {
     case 'begin': S.onboarded = true; save(); U.tab = S.start === 'kana' ? 'today' : 'learn'; render(); break;
     case 'kana': hpush(); U.view = 'kana'; render(); $('#screen').scrollTop = 0; break;
@@ -473,6 +555,11 @@ $('#app').addEventListener('click', e => {
     case 'close': hback(); clearInterval(tick); $('#over').innerHTML = ''; render(); break;
     case 'mock': startMock(a1, +a2); break;
     case 'game': startGame(a1); break;
+    case 'share': openShare(a1, a2, +a3); break;
+    case 'doshare': doShare(); break;
+    case 'chal': chalSheet(); break;
+    case 'chalnew': startChal((curLv() === 'n4' ? '4' : '5') + String(Math.floor(1000 + Math.random() * 9000))); break;
+    case 'chalgo': { const v = $('#code').value.trim(); /^[45]\d{4}$/.test(v) ? startChal(v) : ($('#codemsg').textContent = 'A code has five digits and starts with 4 or 5. Check it and try again.'); break; }
     case 'sensei': { const ov = !!$('#over').innerHTML, had = !!U.view; if (ov) { hback(); clearInterval(tick); $('#over').innerHTML = ''; }
       U.view = 'sensei'; if (!had) ov ? setTimeout(hpush, 80) : hpush(); render(); $('#screen').scrollTop = 0; break; }
     case 'soon': sheet('Opening in the next update', 'This unit is part of your plan. Its lessons are being written now.'); break;

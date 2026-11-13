@@ -1,6 +1,6 @@
 // On-device state, spaced repetition and plan gating.
 const KEY = 'mikomi.v1';
-const DEF = () => ({ onboarded:false, name:'', start:'kana', lang:'hi', exam:'Jul 2027', passes:[], pro:false, srs:{}, tests:{}, mocks:[], best:{}, fails:{}, xp:0, xpDay:null, xpToday:0, goal:30, freezes:1, streak:0, lastDay:null });
+const DEF = () => ({ onboarded:false, name:'', start:'kana', lang:'hi', exam:'Jul 2027', passes:[], pro:false, srs:{}, tests:{}, mocks:[], best:{}, fails:{}, newDay:null, newN:0, xp:0, xpDay:null, xpToday:0, goal:30, freezes:1, streak:0, lastDay:null });
 let saved = null;
 try { saved = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
 export const S = Object.assign(DEF(), saved || {});
@@ -13,6 +13,7 @@ export const seen = id => !!S.srs[id];
 export const box = id => S.srs[id] ? S.srs[id].b : 0;
 export const isDue = id => seen(id) && S.srs[id].d <= today();
 export function grade(id, ok){
+  if (!S.srs[id]) { const t = today(); if (S.newDay !== t) { S.newDay = t; S.newN = 0; } S.newN++; }
   const b = ok ? Math.min(6, box(id) + 1) : 1;
   S.srs[id] = { b, d: today() + (ok ? GAP[b] : 0) }; save();
 }
@@ -36,3 +37,4 @@ export function can(level, unit){
   return S.pro || S.passes.includes(level) || unit <= FREE[level];
 }
 export function canMock(level, n){ return S.pro || S.passes.includes(level) || n === 1; }
+export const newToday = () => S.newDay === today() ? S.newN : 0;
