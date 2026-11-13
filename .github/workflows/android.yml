@@ -20,16 +20,17 @@ jobs:
       - run: npm install
       - name: Create Android project, icons and splash
         run: npm run android
-      - name: Use Mikomi's fixed signing key
+      - name: Configure signing and Firebase
         env:
           KEY: ${{ secrets.MIKOMI_DEBUG_KEYSTORE }}
         run: |
           if [ -n "$KEY" ]; then
             echo "$KEY" | base64 -d > android/app/mikomi-debug.p12
-            python3 tools/android-signing.py
           else
-            echo "::warning::No MIKOMI_DEBUG_KEYSTORE secret set. Building with Gradle's own debug key, so Google sign-in will not work in this APK."
+            echo "::warning::No MIKOMI_DEBUG_KEYSTORE secret set, so this APK is signed with a throwaway key and Google sign-in will not work."
           fi
+          cp -f android-config/google-services.json android/app/google-services.json 2>/dev/null || true
+          python3 tools/android-config.py
 
       - name: Build debug APK
         run: cd android && ./gradlew assembleDebug --no-daemon

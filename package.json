@@ -1,6 +1,6 @@
 {
   "name": "mikomi-app",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "private": true,
   "description": "Mikomi JLPT N5/N4 app. Web app in www/, wrapped for Android with Capacitor.",
   "scripts": {
@@ -8,14 +8,17 @@
     "android": "npx cap add android && npx @capacitor/assets generate --android --iconBackgroundColor '#141b3d' --iconBackgroundColorDark '#141b3d' --splashBackgroundColor '#141b3d' --splashBackgroundColorDark '#141b3d' && npx cap sync android"
   },
   "dependencies": {
+    "@capacitor-community/text-to-speech": "^5.1.0",
     "@capacitor/android": "^6.2.0",
     "@capacitor/core": "^6.2.0",
-    "@capacitor-community/text-to-speech": "^5.1.0",
+    "@capacitor/filesystem": "^6.0.0",
     "@capacitor/share": "^6.0.0",
-    "@capacitor/filesystem": "^6.0.0"
+    "@capacitor-firebase/authentication": "^6.3.1",
+    "firebase": "^11.10.0"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",
-    "@capacitor/cli": "^6.2.0"
+    "@capacitor/cli": "^6.2.0",
+    "esbuild": "^0.28.2"
   }
 }

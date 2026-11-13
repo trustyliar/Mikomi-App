@@ -1,1 +1,13 @@
-{ "appId": "in.mikomi.jlpt", "appName": "Mikomi", "webDir": "www" }
+{
+  "appId": "in.mikomi.jlpt",
+  "appName": "Mikomi",
+  "webDir": "www",
+  "plugins": {
+    "FirebaseAuthentication": {
+      "skipNativeAuth": false,
+      "providers": [
+        "google.com"
+      ]
+    }
+  }
+}

@@ -1,5 +1,7 @@
 import { S, save, reset, seen, box, isDue, grade, markStudy, liveStreak, can, canMock, today, addXp, xpToday, newToday } from './store.js';
 import { READ } from './read.js';
+import * as cloud from './cloud.js';
+const { C } = cloud;
 import { KANA, KROWS, UNITS, STN, deva } from './data.js';
 import { N5W, N5K } from './n5.js';
 import { N4W, N4K } from './n4.js';
@@ -222,6 +224,8 @@ function resultView(){
     <button class="btn" data-act="close">Done</button>`;
 }
 
+const signinBtn = cls => `<button class="btn ${cls}" data-act="signin" ${C.busy ? 'disabled' : ''}>${C.busy ? 'Signing in…' : 'Sign in with Google'}</button>`;
+
 /* ---------- screens ---------- */
 const V = {
   onboard(){
@@ -236,8 +240,8 @@ const V = {
         ${['Dec 2026','Jul 2027','Dec 2027'].map(v => `<button data-set="exam:${v}" aria-pressed="${S.exam===v}">${v}</button>`).join('')}</div></div>
     </div>
     <button class="btn" data-act="begin">Start learning</button>
-    <button class="btn ghost" disabled>Sign in with Google (coming soon)</button>
-    <p class="muted center">Your progress is saved on this phone for now.</p>`;
+    ${signinBtn('ghost')}
+    <p class="muted center">${C.user ? 'Your progress is backed up to your Google account.' : 'Sign in to keep your progress if you change phones.'}</p>`;
   },
   today(){
     const due = dueAll(), st = nextStep(), learned = ALL.filter(k => seen(k.id)).length;
@@ -332,7 +336,8 @@ const V = {
       <div class="field"><span class="lab">Daily goal</span><div class="seg">${[[10,'Light · 10 XP'],[30,'Regular · 30'],[50,'Serious · 50']].map(([v,t]) => `<button data-set="goal:${v}" aria-pressed="${S.goal == v}">${t}</button>`).join('')}</div></div></div>
     <div class="card"><div class="field"><span class="lab">Explain things in</span><div class="seg"><button data-set="lang:hi" aria-pressed="${S.lang==='hi'}">हिंदी</button><button data-set="lang:en" aria-pressed="${S.lang==='en'}">English</button></div></div>
       <div class="field"><span class="lab">Target exam</span><div class="seg">${Object.keys(EXAMS).map(v => `<button data-set="exam:${v}" aria-pressed="${S.exam===v}">${v}</button>`).join('')}</div></div>
-      <button class="btn ghost" disabled>Sign in with Google (coming soon)</button></div>
+      ${C.user ? `<p class="muted">Signed in as <b>${esc(C.user.name || 'your Google account')}</b>. Your progress is backed up automatically.</p><button class="btn ghost" data-act="signout">Sign out</button>` : `<p class="muted">Sign in to keep your streak, stamps and scores if you change phones.</p>${signinBtn('dark')}`}
+      ${C.note ? `<p class="muted"><b>${C.note}</b></p>` : ''}</div>
     <div class="card"><p class="eyebrow">Share and certificates</p>
       <button class="btn ghost" data-act="share:streak" ${liveStreak() ? '' : 'disabled'}>Share my ${liveStreak()}-day streak</button>
       ${['n5','n4'].map(lv => { const n = UNITS[lv].length, dn = UNITS[lv].filter((_, i) => passed(lv, i+1)).length; return dn === n ? `<button class="btn dark" data-act="share:cert:${lv}">View my ${lv.toUpperCase()} certificate</button>` : `<p class="muted">${lv.toUpperCase()} certificate: ${dn} of ${n} stations cleared</p>`; }).join('')}</div>
@@ -566,7 +571,10 @@ $('#app').addEventListener('click', e => {
     case 'lock': sheet(`This needs the ${a1.toUpperCase()} Exam Pass`, `Kana, N5 units 1 to 5, N4 unit 1 and the first mock of each level are free. The Exam Pass (₹499) opens all of ${a1.toUpperCase()} until exam day. Pro opens both levels.`, 'See plans', '<button class="btn dark" data-act="sensei">Prefer a teacher? See live classes</button>'); break;
     case 'plans': hback(); $('#over').innerHTML = ''; U.tab = 'me'; U.view = null; render(); break;
     case 'pay': sheet('Payments are not switched on yet', 'Purchases through Google Play arrive in a later update. Use the tester tools below to preview a paid plan.'); break;
+    case 'signin': cloud.signIn(); break;
+    case 'signout': cloud.signOut().then(render); break;
     case 'reset': reset(); U.tab = 'today'; U.view = null; render(); break;
   }
 });
 render();
+cloud.init(() => { if (!$('#over').innerHTML) render(); });

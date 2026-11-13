@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "441863264945",
+    "project_id": "mikomi-app-92f1c",
+    "storage_bucket": "mikomi-app-92f1c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:441863264945:android:d6d119058a672472306090",
+        "android_client_info": {
+          "package_name": "Com.mikomi.japanese"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDhK9Jj-qpOdnEOsWkd4WdDVY1lpNklTRk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:441863264945:android:43e8f296a1a69d8d306090",
+        "android_client_info": {
+          "package_name": "in.mikomi.jlpt"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDhK9Jj-qpOdnEOsWkd4WdDVY1lpNklTRk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
