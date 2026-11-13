@@ -1,0 +1,87 @@
+/* Layout idea: one phone-width column, bottom tab bar, full-screen overlays for lessons.
+   Aizome indigo ink on cool paper with a vermilion hanko accent. Single theme by choice. */
+:root{
+  color-scheme: light;
+  --paper:#eef0f5; --card:#fff; --ink:#1b2444; --ink-soft:#5a6485; --line:#d7dbe8; --tint:#e6e9f7;
+  --indigo:#27348b; --indigo-deep:#141b3d; --shu:#d8412b; --shu-tint:#fbe4df; --good:#1f8a5b; --good-tint:#dff3ea;
+  --display:"Shippori Mincho","Noto Serif JP",Georgia,serif;
+  --body:"Zen Kaku Gothic New","Noto Sans Devanagari","Hiragino Sans","Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{background:var(--indigo-deep);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none}
+button:focus-visible,input:focus-visible{outline:3px solid var(--shu);outline-offset:2px}
+.app{height:100%;max-width:440px;margin:0 auto;background:var(--paper);display:flex;flex-direction:column;position:relative;overflow:hidden}
+.screen{flex:1;overflow-y:auto;padding:18px 16px 24px;display:flex;flex-direction:column;gap:14px}
+.nav{display:flex;background:var(--card);border-top:1px solid var(--line)}
+.nav:empty{display:none}
+.nav button{flex:1;padding:8px 2px 10px;display:flex;flex-direction:column;align-items:center;gap:1px;color:var(--ink-soft);font-size:11px}
+.nav button b{font-family:var(--display);font-size:17px}
+.nav button[aria-current="true"]{color:var(--shu)}
+h1{font-family:var(--display);font-size:34px;line-height:1.15}
+h1 span{color:var(--shu)}
+h3{font-family:var(--display);font-size:20px;line-height:1.3;text-wrap:balance}
+.eyebrow{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft)}
+.muted{color:var(--ink-soft);font-size:13px}
+.card{background:var(--card);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.hero{background:var(--indigo-deep);color:#fff;border-radius:20px;padding:18px;display:flex;flex-direction:column;gap:10px}
+.hero .muted,.hero .eyebrow{color:#b9c0e6}
+.btn{background:var(--shu);color:#fff;border-radius:12px;padding:12px 16px;font-weight:700;text-align:center;width:100%}
+.btn.ghost{background:transparent;color:var(--indigo);border:1.5px solid var(--indigo)}
+.btn.dark{background:var(--indigo)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--tint);color:var(--indigo);white-space:nowrap}
+.pill.pro{background:var(--shu-tint);color:var(--shu)}
+.pill.ok{background:var(--good-tint);color:var(--good)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stats div{background:var(--card);border-radius:14px;padding:10px 12px}
+.stats b{font-family:var(--display);font-size:22px;display:block}
+.stats span{font-size:11px;color:var(--ink-soft)}
+.list{display:flex;flex-direction:column}
+.item{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line);text-align:left;width:100%}
+.item:last-child{border-bottom:0}
+.item .k{font-family:var(--display);font-size:18px;width:40px;height:40px;border-radius:10px;background:var(--tint);color:var(--indigo);display:flex;align-items:center;justify-content:center;flex:none}
+.item div{flex:1;min-width:0}
+.item div b{display:block}
+.seg{display:flex;background:#e2e5f1;border-radius:10px;padding:3px;gap:3px}
+.seg button{flex:1;padding:7px 4px;border-radius:8px;font-size:13px;font-weight:700;color:var(--ink-soft)}
+.seg button[aria-pressed="true"]{background:var(--card);color:var(--indigo)}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label,.field .lab{font-size:13px;font-weight:700}
+.field input{border:1.5px solid var(--line);border-radius:12px;padding:11px 12px;background:var(--card)}
+.meter{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.meter u{display:block;height:100%;background:var(--shu)}
+.krow{display:grid;grid-template-columns:repeat(5,1fr) auto;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.krow:last-child{border-bottom:0}
+.kc{display:flex;flex-direction:column;align-items:center;padding:6px 0;border-radius:10px;background:#f1f3fa}
+.kc b{font-family:var(--display);font-size:22px;line-height:1.2}
+.kc span{font-size:10px;color:var(--ink-soft)}
+.kc.s1{background:var(--tint)} .kc.s2{background:var(--good-tint)}
+.kgo{font-size:12px;font-weight:700;color:var(--shu);padding:8px 4px 8px 8px}
+.over{position:absolute;inset:0;background:var(--paper);display:flex;flex-direction:column;padding:16px;gap:14px;overflow-y:auto;z-index:5}
+.over header{display:flex;align-items:center;gap:10px}
+.over .x{font-size:20px;width:32px;height:32px}
+.prog{flex:1;height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.prog u{display:block;height:100%;background:var(--shu);transition:width .25s}
+.big{font-family:var(--display);font-size:120px;line-height:1.2;text-align:center}
+.big.w1{font-size:68px}.big.w2{font-size:40px}.rd{font-size:18px}
+.opt.jp.w1{font-size:24px}.opt.jp.w2{font-size:18px}
+.mid small,.opt small{font-family:var(--body)}
+.mid{font-family:var(--display);font-size:28px;line-height:1.3;text-align:center}.mid small{display:block;font-size:14px;color:var(--ink-soft)}
+.center{text-align:center}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.opt{background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:16px 8px;font-size:18px;text-align:center}
+.opt.jp{font-family:var(--display);font-size:34px}
+.opt small{display:block;font-size:13px;color:var(--ink-soft)}
+.opt.right{border-color:var(--good);background:var(--good-tint)}
+.opt.wrong{border-color:var(--shu);background:var(--shu-tint)}
+.grow{flex:1}
+.sheet{background:rgba(20,27,61,.55);justify-content:flex-end;padding:0}
+.sheet .card{border-radius:24px 24px 0 0;padding:22px 18px 26px}
+.plan{border:1.5px solid var(--line);border-radius:16px;padding:14px;background:var(--card);display:flex;flex-direction:column;gap:6px}
+.plan.best{border-color:var(--shu)}
+.price{font-family:var(--display);font-size:24px}
+.price small{font-family:var(--body);font-size:13px;color:var(--ink-soft)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
