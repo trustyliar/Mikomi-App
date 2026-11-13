@@ -1,6 +1,6 @@
 // On-device state, spaced repetition and plan gating.
 const KEY = 'mikomi.v1';
-const DEF = () => ({ onboarded:false, name:'', start:'kana', lang:'hi', exam:'Jul 2027', passes:[], pro:false, srs:{}, tests:{}, mocks:[], streak:0, lastDay:null });
+const DEF = () => ({ onboarded:false, name:'', start:'kana', lang:'hi', exam:'Jul 2027', passes:[], pro:false, srs:{}, tests:{}, mocks:[], xp:0, xpDay:null, xpToday:0, goal:30, freezes:1, streak:0, lastDay:null });
 let saved = null;
 try { saved = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
 export const S = Object.assign(DEF(), saved || {});
@@ -16,11 +16,18 @@ export function grade(id, ok){
   const b = ok ? Math.min(6, box(id) + 1) : 1;
   S.srs[id] = { b, d: today() + (ok ? GAP[b] : 0) }; save();
 }
+// A streak freeze covers one missed day. Learners start with one and earn another every 7-day streak (2 at most).
 export function markStudy(){
   const t = today(); if (S.lastDay === t) return;
-  S.streak = S.lastDay === t - 1 ? S.streak + 1 : 1; S.lastDay = t; save();
+  if (S.lastDay === t - 1) S.streak++;
+  else if (S.lastDay === t - 2 && S.freezes > 0) { S.freezes--; S.streak++; }
+  else S.streak = 1;
+  if (S.streak % 7 === 0 && S.freezes < 2) S.freezes++;
+  S.lastDay = t; save();
 }
-export const liveStreak = () => (S.lastDay !== null && S.lastDay >= today() - 1) ? S.streak : 0;
+export const liveStreak = () => { if (S.lastDay === null) return 0; const gap = today() - S.lastDay; return gap <= 1 || (gap === 2 && S.freezes > 0) ? S.streak : 0; };
+export function addXp(n){ const t = today(); if (S.xpDay !== t) { S.xpDay = t; S.xpToday = 0; } S.xpToday += n; S.xp += n; save(); }
+export const xpToday = () => S.xpDay === today() ? S.xpToday : 0;
 
 // What the free tier includes. Everything else needs an Exam Pass for that level, or Pro.
 const FREE = { n5: 5, n4: 1 };

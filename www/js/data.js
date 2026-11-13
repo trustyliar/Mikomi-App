@@ -50,3 +50,10 @@ export const UNITS = {
     ['Causative','しえき, 〜させて ください'], ['Respect language','そんけいご, けんじょうご, N4 revision']
   ]
 };
+
+// Journey map: each unit is a station on the way from Narita to Hakata. [japanese, english]
+const st = (jp, en) => jp.split(' ').map((j, i) => [j, en.split(' ')[i]]);
+export const STN = {
+  n5: st('成田 上野 浅草 秋葉原 東京 銀座 渋谷 新宿 原宿 品川 横浜 鎌倉 小田原 箱根 熱海 三島 富士 静岡 浜松 名古屋', 'Narita Ueno Asakusa Akihabara Tokyo Ginza Shibuya Shinjuku Harajuku Shinagawa Yokohama Kamakura Odawara Hakone Atami Mishima Fuji Shizuoka Hamamatsu Nagoya'),
+  n4: st('岐阜 米原 彦根 大津 京都 宇治 奈良 大阪 難波 神戸 姫路 岡山 倉敷 福山 尾道 広島 宮島 岩国 山口 下関 小倉 博多', 'Gifu Maibara Hikone Otsu Kyoto Uji Nara Osaka Namba Kobe Himeji Okayama Kurashiki Fukuyama Onomichi Hiroshima Miyajima Iwakuni Yamaguchi Shimonoseki Kokura Hakata')
+};
