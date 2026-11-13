@@ -15,6 +15,7 @@ const CFG = {
 let F = null, auth = null, db = null, changed = () => {};
 export const C = { ready:false, user:null, busy:false, note:'' };
 const plugin = () => window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FirebaseAuthentication;
+const native = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 
 export async function init(onChange){
   changed = onChange;
@@ -35,9 +36,12 @@ export async function init(onChange){
 
 export async function signIn(){
   if (!C.ready) { C.note = 'Sign-in is not available here. It works in the Android app.'; return changed(); }
+  const P = plugin();
+  // Inside the app, signing in must go through the native plugin. The browser pop-up
+  // used on the web opens an outside browser that has no way back, so never try it here.
+  if (!P && native()) { C.note = 'This build of the app cannot sign in. Install the full Mikomi app instead.'; return changed(); }
   C.busy = true; C.note = ''; changed();
   try {
-    const P = plugin();
     if (P) {
       const r = await P.signInWithGoogle();
       const t = r && r.credential && r.credential.idToken;
