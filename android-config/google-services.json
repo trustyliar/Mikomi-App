@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "441863264945-6ab84d6fpcddgv412i7rte3bcpp959ae.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "in.mikomi.jlpt",
+            "certificate_hash": "0bd8586295a8f063192b2fcc4eac4c7ec45d5610"
+          }
+        },
+        {
           "client_id": "441863264945-v383ij2hcuqqbhq0p8jbcdm2dorn0a8b.apps.googleusercontent.com",
           "client_type": 3
         }
