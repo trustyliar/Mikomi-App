@@ -1,11 +1,11 @@
 // On-device state, spaced repetition and plan gating.
 const KEY = 'mikomi.v1';
-const DEF = { onboarded:false, name:'', start:'kana', lang:'hi', exam:'Jul 2027', passes:[], pro:false, srs:{}, streak:0, lastDay:null };
+const DEF = () => ({ onboarded:false, name:'', start:'kana', lang:'hi', exam:'Jul 2027', passes:[], pro:false, srs:{}, tests:{}, streak:0, lastDay:null });
 let saved = null;
 try { saved = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
-export const S = Object.assign({}, DEF, saved || {});
+export const S = Object.assign(DEF(), saved || {});
 export function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
-export function reset(){ Object.assign(S, JSON.parse(JSON.stringify(DEF))); save(); }
+export function reset(){ Object.assign(S, DEF()); save(); }
 
 export const today = () => Math.floor((Date.now() - new Date().getTimezoneOffset()*6e4) / 864e5);
 const GAP = [0,1,2,4,7,15,30]; // days until next review, by box
