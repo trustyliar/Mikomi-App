@@ -35,16 +35,43 @@ jobs:
       - name: Build debug APK
         run: cd android && ./gradlew assembleDebug --no-daemon
       - run: cp android/app/build/outputs/apk/debug/app-debug.apk mikomi-test.apk
+      - name: Build a plugin-free diagnostic APK
+        run: |
+          python3 - <<'EOF'
+          import json
+          pkg = json.load(open('package.json'))
+          for d in ['@capacitor-firebase/authentication', '@capacitor/share', '@capacitor/filesystem', '@capacitor-community/text-to-speech', 'firebase']:
+              pkg['dependencies'].pop(d, None)
+          json.dump(pkg, open('package.json', 'w'), indent=2)
+          cfg = json.load(open('capacitor.config.json'))
+          cfg['appId'] = 'in.mikomi.plain'
+          cfg['appName'] = 'Mikomi Plain'
+          cfg.pop('plugins', None)
+          json.dump(cfg, open('capacitor.config.json', 'w'), indent=2)
+          EOF
+          npm install
+          rm -rf android
+          npx cap add android
+          npx cap sync android
+          cd android && ./gradlew assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk ../mikomi-plain.apk
+
       - uses: actions/upload-artifact@v4
         with:
           name: mikomi-test-apk
-          path: mikomi-test.apk
+          path: |
+            mikomi-test.apk
+            mikomi-plain.apk
       - name: Publish as the "Latest test build" release
         continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
           tag_name: test-build
           name: Latest test build
-          body: Test build of the Mikomi app from the main branch. Download mikomi-test.apk on an Android phone and open it to install.
-          files: mikomi-test.apk
+          body: |
+            Test builds of the Mikomi app from the main branch.
+            mikomi-test.apk is the real app. mikomi-plain.apk is a diagnostic build with every plugin removed; it installs alongside the real one under the name "Mikomi Plain".
+          files: |
+            mikomi-test.apk
+            mikomi-plain.apk
           prerelease: true
